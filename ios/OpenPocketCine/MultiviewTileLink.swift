@@ -1,4 +1,5 @@
 import Foundation
+import OpenCineApple
 import OpenCineCore
 import OpenCineDJIApple
 import OpenPocketViewCore
@@ -6,25 +7,33 @@ import OpenPocketViewCore
 /// The DJI member link Pocket supplies (spec's settled call): each tile's own datalink, identity
 /// check, live view start, watchdog repair and Auto LUT, behind OpenCine's `MultiviewMemberLink`.
 /// The session keeps what the shared coordinator will own: guards, address reservations,
-/// discovery, the rejoin budget and the path-loss rule.
+/// discovery, the rejoin budget, the path-loss rule and the tile's copy and control host, which
+/// it derives from the link's `onStatus`.
 extension MultiviewSession.Tile: MultiviewMemberLink {
     typealias Camera = DjiAppleSighting
 
     var session: any OpenCineCore.CameraSession { control }
 
-    func probe(_ address: String, hotspot: Bool) async -> Bool {
-        await DjiAppleNetworkDiscovery().probe(address, hotspot: hotspot)
+    var isPublishing: Bool { publishing }
+
+    /// Longer than any DJI repair's own bound (the decoder repair's two 16 s windows, the UDP
+    /// renegotiation's 15 s station deadline), so the race never cuts a DJI repair short.
+    var repairDeadline: Duration { .seconds(60) }
+
+    func probe(_ address: String, on network: StationNetwork) async -> Bool {
+        guard let local = SharedWiFiPath().address(hotspot: network.hotspot) else { return false }
+        return await DjiAppleNetworkDiscovery().probe(address, localAddress: local)
     }
 
-    func open(_ camera: DjiAppleSighting, at address: String, identity: [UInt8], hotspot: Bool)
-        async throws
-    {
+    func open(
+        _ camera: DjiAppleSighting, at address: String, expecting identity: [UInt8]?,
+        on network: StationNetwork
+    ) async throws -> [UInt8] {
         driver?.close()
         driver = nil
-        controlHost = nil
+        controlLinkUp = false
         responses.removeAll()
         recordingObservation = nil
-        recordingAvailable = false
         publishing = false
         previewStarted = nil
         decoder.onHandoffNeedsIDR = nil
@@ -32,11 +41,11 @@ extension MultiviewSession.Tile: MultiviewMemberLink {
         enableSends = 0
         lastEnable = .distantPast
         if hasPicture { decoder.beginIDRHold() } else { decoder.reset() }
-        status = "Connecting normal preview"
+        onStatus?(.opening)
         let driver = DjiAppleDatalink(
             port: UInt16(camera.model.datalinkPort), tcpPoke: camera.model.tcpPoke,
             pairingToken: camera.model.pairingToken,
-            stationHost: address, stationHotspot: hotspot,
+            stationHost: address, stationHotspot: network.hotspot,
             subscriptionKeys: Commands.subscriptionKeys(for: camera.model), host: .pocket)
         self.driver = driver
         driver.onStatusFrame = { [weak self, weak driver] frame in
@@ -45,7 +54,7 @@ extension MultiviewSession.Tile: MultiviewMemberLink {
                 if tile.responses.count > 128 { tile.responses.removeAll() }
                 tile.responses[frame.seq] = frame
             }
-            guard tile.controlHost != nil else { return }
+            guard tile.controlLinkUp else { return }
             tile.updateSettings(frame)
             tile.liveModel?.session.receiveMultiview(frame)
             if frame.cmdSet == 2 && frame.cmdId == 0x80 && frame.payload.count >= 13 {
@@ -61,22 +70,23 @@ extension MultiviewSession.Tile: MultiviewMemberLink {
             try await Task.sleep(for: .milliseconds(50))
         }
         guard let reply = responses.removeValue(forKey: identitySeq),
-            reply.cmdSet == 7, reply.cmdId == 7, reply.payload == identity
+            reply.cmdSet == 7, reply.cmdId == 7, identity.map({ reply.payload == $0 }) ?? true
         else {
             throw MultiviewFailure.message(
                 "This network connection did not identify the selected camera.")
         }
+        return reply.payload
     }
 
     func startPreview(_ camera: DjiAppleSighting) async throws {
         guard let driver else { throw CancellationError() }
         driver.completeRegistration()
-        controlHost = cameraAddress
+        controlLinkUp = true
+        onStatus?(.controlling)
         liveModel?.session.updateMultiview(camera: camera, driver: driver, status: latestSettings)
-        failureMessage = nil
         ControlLiveLog.line("multiview: station camera identity verified")
         decoder.onHandoffNeedsIDR = { [weak self, weak driver] in
-            guard let tile = self, let driver, tile.driver === driver, tile.controlHost != nil else {
+            guard let tile = self, let driver, tile.driver === driver, tile.controlLinkUp else {
                 return
             }
             tile.pendingAssistHandoff = true
@@ -93,14 +103,15 @@ extension MultiviewSession.Tile: MultiviewMemberLink {
         enableSends = 1
         publishing = true
         previewStarted = Date()
-        if !hasPicture { status = "Waiting for video" }
+        if !hasPicture { onStatus?(.awaitingPicture) }
     }
 
-    func keepalive() { driver?.keepalive() }
+    func keepalive() async { driver?.keepalive() }
 
     func close() {
         driver?.close()
         driver = nil
+        controlLinkUp = false
     }
 
     var autoLUT: MultiviewAutoLUT { autoLUT(for: autoLUTSource) }
@@ -147,7 +158,7 @@ extension MultiviewSession.Tile: MultiviewMemberLink {
         }
         guard action != .none else { return .healthy }
         ControlLiveLog.line("multiview: repair action=\(action)")
-        status = "Reconnecting…"
+        onStatus?(.reconnecting)
         if action == .resendLiveViewEnable {
             guard decoder.isPresentationReady, let camera else {
                 recovery = previousRecovery
@@ -169,7 +180,7 @@ extension MultiviewSession.Tile: MultiviewMemberLink {
                 return .handled
             }
             return .repair { [weak self, weak driver] in
-                guard let tile = self, let driver else { return false }
+                guard let tile = self, let driver else { return .done }
                 let requestedAt = Date()
                 var sentAt: Date?
                 while context.running(), !Task.isCancelled, tile.driver === driver,
@@ -179,7 +190,7 @@ extension MultiviewSession.Tile: MultiviewMemberLink {
                     if let sentAt, tile.hasFreshPicture(since: sentAt) {
                         tile.recovery.watchdog = FeedWatchdog()
                         ControlLiveLog.line("multiview: decoder repair restored fresh picture")
-                        return false
+                        return .done
                     }
                     if sentAt == nil, context.applicationActive(), tile.decoder.isPresentationReady,
                         context.pathAvailable(), let camera = tile.camera
@@ -194,29 +205,29 @@ extension MultiviewSession.Tile: MultiviewMemberLink {
                     try? await Task.sleep(for: .milliseconds(200))
                 }
                 guard context.running(), !Task.isCancelled, tile.driver === driver else {
-                    return false
+                    return .done
                 }
                 return tile.finishDecoderRepair(
                     previous: previousRecovery, sentAt: sentAt,
                     applicationActive: context.applicationActive(),
-                    foregroundUnchanged: context.foregroundUnchanged())
+                    foregroundUnchanged: context.foregroundUnchanged()) ? .rejoin : .done
             }
         }
-        if action == .fullSessionRejoin { return .repair { true } }
+        if action == .fullSessionRejoin { return .repair { .rejoin } }
         return .repair { [weak self] in
-            guard let tile = self else { return false }
+            guard let tile = self else { return .done }
             do {
                 try await driver.rebuildUDP(reason: "multiview watchdog")
                 guard context.running(), tile.driver === driver, !Task.isCancelled,
                     let camera = tile.camera
-                else { return false }
+                else { return .done }
                 driver.startLiveView(receiver: camera.model.liveViewEnableReceiver)
                 tile.lastEnable = Date()
                 tile.enableSends += 1
                 tile.decoder.beginIDRHold()
-                return false
+                return .done
             } catch {
-                return context.running() && !Task.isCancelled
+                return context.running() && !Task.isCancelled ? .rejoin : .done
             }
         }
     }

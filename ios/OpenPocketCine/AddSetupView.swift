@@ -58,7 +58,9 @@ private struct PocketSetupDestination: View {
                     kind: network.hotspot ? .phoneHotspot : .infrastructureNetwork,
                     network: network.ssid, secret: network.password))
                 return true
-            }, close: { done(nil) }, path: path
+            }, close: { done(nil) }, path: path,
+            // Only Multiview locks the network; Add setup never shows the locked page.
+            complete: { done(nil) }
         )
         .presentationBackground(MonitorTheme.background)
     }

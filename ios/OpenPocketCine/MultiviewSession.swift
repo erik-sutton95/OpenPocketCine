@@ -184,6 +184,11 @@ final class MultiviewSession {
             return true
         }
         var publishing = false
+        /// The member link's own record that its control link is up (it reported `controlling`);
+        /// the session's `controlHost` follows it.
+        @ObservationIgnored var controlLinkUp = false
+        /// Where the member link reports its status; the session maps it to the tile's copy.
+        @ObservationIgnored var onStatus: (@MainActor (MultiviewLinkStatus) -> Void)?
         var recordingBusy = false
         var recordingAvailable = false
         var recordingNote: String?
@@ -250,7 +255,7 @@ final class MultiviewSession {
                         ControlLiveLog.line("multiview: station preview enqueued")
                         tile.hasPicture = true
                     }
-                    if tile.status != "Live · Video mode" { tile.status = "Live · Video mode" }
+                    tile.onStatus?(.live)
                 }
             }
         }
@@ -348,6 +353,7 @@ final class MultiviewSession {
     /// The phone's side of the shared network and DJI's camera setup, through OpenCine's seams.
     let hostPath: any StationHostPath
     private let commissioner: any StationCommissioner<DjiAppleSighting>
+    private let cameraPolicy = MultiviewCameraPolicy<DjiAppleSighting>.dji
     private var searches: [UUID: DjiAppleNetworkDiscovery] = [:]
     private var connectionTasks: [UUID: Task<Void, Never>] = [:]
     private var hostJoin: Task<Void, Error>?
@@ -383,6 +389,31 @@ final class MultiviewSession {
         self.hostPath = hostPath
         commissioner = DJIStationCommissioner(
             host: .pocket, hostPath: hostPath, retryDelay: resetRetryDelay)
+        for tile in tiles {
+            tile.onStatus = { [weak self, weak tile] status in
+                guard let self, let tile else { return }
+                self.show(status, on: tile)
+            }
+        }
+    }
+
+    /// The coordinator's half of a member link's status: the tile's copy, and the control host
+    /// it records once the link's control path is up at the address it was opened at.
+    func show(_ status: MultiviewLinkStatus, on tile: Tile) {
+        switch status {
+        case .opening: tile.status = "Connecting normal preview"
+        case .controlling:
+            tile.controlHost = tile.cameraAddress
+            tile.failureMessage = nil
+        case .awaitingPicture: tile.status = "Waiting for video"
+        case .live: if tile.status != "Live · Video mode" { tile.status = "Live · Video mode" }
+        case .reconnecting: tile.status = "Reconnecting…"
+        }
+    }
+
+    /// The shared network as the member links open on it.
+    private var stationNetwork: StationNetwork {
+        StationNetwork(ssid: ssid, password: password, hotspot: usePhoneHotspot)
     }
 
     private enum ProvisioningFailure: LocalizedError {
@@ -439,7 +470,7 @@ final class MultiviewSession {
                 guard let self else { return }
                 self.ready = self.hostPath.address(hotspot: self.usePhoneHotspot) != nil
                 for tile in self.tiles {
-                    tile.keepalive()
+                    await tile.keepalive()
                     tile.recoverAssistHandoff()
                     let available =
                         tile.controlHost != nil
@@ -517,7 +548,7 @@ final class MultiviewSession {
             var camera: DjiAppleSighting?
             for _ in 0..<10 {
                 try Task.checkCancellation()
-                camera = found.first(where: { commissioner.hasPreview($0) })
+                camera = found.first(where: { cameraPolicy.hasPreview($0) })
                 if camera != nil { break }
                 try await Task.sleep(for: .milliseconds(300))
             }
@@ -700,7 +731,9 @@ final class MultiviewSession {
             pathAvailable: { [weak self] in
                 guard let self else { return false }
                 return hostPath.address(hotspot: usePhoneHotspot) != nil
-            })
+            },
+            beginAttempt: { [weak tile] in tile?.recovery.beginRejoin() ?? false },
+            bluetoothTurn: { [weak self] in await self?.bluetoothTurn() })
         switch tile.repair(context) {
         case .healthy:
             if !pathReady, now.timeIntervalSince(tile.pathLostAt ?? now) > 45 {
@@ -710,17 +743,41 @@ final class MultiviewSession {
             }
         case .handled:
             break
+        case .waitForOperator(let message):
+            waitForOperator(tile, message)
         case .repair(let work):
             tile.recovering = true
+            let deadline = tile.repairDeadline
             tile.repairTask = Task { [weak self, weak tile] in
                 guard let self, let tile else { return }
                 defer {
                     tile.recovering = false
                     tile.repairTask = nil
                 }
-                if await work() { await rejoinWhenAvailable(tile) }
+                switch await MultiviewRepairResult.race(deadline: deadline, work) {
+                case .done: break
+                case .rejoin: await rejoinWhenAvailable(tile)
+                case .waitForOperator(let message): waitForOperator(tile, message)
+                }
             }
         }
+    }
+
+    /// No automatic repair remains for this tile: it shows why and offers Reconnect.
+    private func waitForOperator(_ tile: Tile, _ message: String) {
+        tile.recovery.fail()
+        tile.failureMessage = message
+    }
+
+    /// A member link's turn on Bluetooth for its repair: after any add or network scan (the
+    /// session's Bluetooth users) has finished. DJI's link never asks; the shared coordinator owns
+    /// the real queue (Plan 3).
+    private func bluetoothTurn() async -> (@MainActor () -> Void)? {
+        while running, !Task.isCancelled, busy || connectingCameras {
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+        guard running, !Task.isCancelled else { return nil }
+        return {}
     }
 
     private func rejoinWhenAvailable(_ tile: Tile) async {
@@ -739,7 +796,7 @@ final class MultiviewSession {
     func add(_ camera: DjiAppleSighting, to tile: Tile, experimental: Bool = false) async {
         let reasons = ResourceAdmission.reasons(
             admitting: ResourceRequest(entry: MonitorEntryID(tile.id), device: nil, claims: []),
-            qualification: commissioner.qualification(camera, experimental: experimental),
+            qualification: cameraPolicy.qualification(camera, experimental: experimental),
             alongside: recordingTiles.map {
                 ResourceRequest(entry: MonitorEntryID($0.id), device: nil, claims: [])
             }, budget: MultiviewQualificationPolicy.budget)
@@ -774,8 +831,7 @@ final class MultiviewSession {
             let identity = try await link.identity()
             stage = "station join"
             let outcome = try await link.join(
-                StationNetwork(ssid: ssid, password: password, hotspot: usePhoneHotspot),
-                identity: identity, experimental: experimental, progress: { tile.status = $0 },
+                stationNetwork, identity: identity, experimental: experimental, progress: { tile.status = $0 },
                 verifyOnNetwork: {
                     try await self.discoverPreview(tile, camera: camera, identity: identity)
                     return true
@@ -877,11 +933,15 @@ final class MultiviewSession {
             throw ProvisioningFailure.message(
                 "Camera discovery returned an unavailable address. Tap Reconnect to search again.")
         }
-        try await tile.open(
-            camera, at: tile.cameraAddress, identity: identity, hotspot: usePhoneHotspot)
+        let proven = try await tile.open(
+            camera, at: address, expecting: identity, on: stationNetwork)
+        guard !tiles.contains(where: { $0.id != tile.id && $0.identity == proven }) else {
+            tile.close()
+            throw ProvisioningFailure.message("This camera is already in Multiview.")
+        }
         guard running else { throw CancellationError() }
         tile.networkVerified = true
-        if !commissioner.hasPreview(camera) {
+        if !cameraPolicy.hasPreview(camera) {
             tile.close()
             tile.failureMessage = nil
             tile.status = "Wi-Fi join verified · Preview not supported yet"
