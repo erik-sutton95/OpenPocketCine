@@ -1,3 +1,4 @@
+import Observation
 import OpenCineCore
 import OpenCineHostedTestSupport
 import OpenPocketViewCore
@@ -87,6 +88,21 @@ import OpenCineDJIApple
         XCTAssertTrue(session.canRecordTogether)
         session.tiles[1].recordingBusy = true
         XCTAssertFalse(session.canRecordTogether)
+    }
+    func testRecordingFlipRefreshesTheStageByItself() {
+        let session = MultiviewSession()
+        let tile = session.tiles[0]
+        assign(tile, recording: false, available: true)
+        let changed = ObservationFlag()
+        withObservationTracking {
+            _ = session.anyRecording
+            _ = session.coordinator.recordingActive(slot: 0)
+        } onChange: {
+            changed.set()
+        }
+        tile.recordingObservation = (true, Date())
+        XCTAssertTrue(
+            changed.value, "the border, lamp and Stop/Start follow the camera's REC flip itself")
     }
     func testMemberLinkStatusShowsPocketsTileCopyAndTheSessionOwnsTheControlHost() {
         let session = MultiviewSession()
@@ -224,4 +240,12 @@ import OpenCineDJIApple
         next.close()
     }
 
+}
+
+/// Set once by an observation's `onChange`.
+private final class ObservationFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var isSet = false
+    var value: Bool { lock.withLock { isSet } }
+    func set() { lock.withLock { isSet = true } }
 }

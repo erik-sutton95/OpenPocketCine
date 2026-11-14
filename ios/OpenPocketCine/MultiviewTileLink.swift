@@ -17,9 +17,14 @@ extension MultiviewSession.Tile: MultiviewMemberLink {
     var snapshot: CameraSnapshot { control.current }
 
     /// The camera's own latest take report on this link (0x02/0x80), as the stage's record
-    /// freshness and confirmation read it.
+    /// freshness and confirmation read it. Its state comes from the observed `recordingActive`
+    /// (it changes only on a REC flip), so the stage's border, lamp and Stop/Start follow the flip
+    /// itself; the per-frame stamp stays unobserved.
     var recordReport: MultiviewRecordReport? {
-        recordingObservation.map { MultiviewRecordReport(recording: $0.active, receivedAt: $0.received) }
+        guard let recording = recordingActive, let observation = recordingObservation else {
+            return nil
+        }
+        return MultiviewRecordReport(recording: recording, receivedAt: observation.received)
     }
 
     /// Longer than any DJI repair's own bound (the decoder repair's two 16 s windows, the UDP
