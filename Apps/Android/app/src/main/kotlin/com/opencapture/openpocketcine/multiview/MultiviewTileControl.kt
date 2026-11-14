@@ -72,6 +72,8 @@ internal class MultiviewTileControl(
     /** Reply to the record command received at or after `since`: `true` ACK, `false` NACK. */
     private val reply: (since: Long) -> Boolean?,
     private val setBusy: (Boolean) -> Unit,
+    /** Writes the tile's record note ("Waiting for camera confirmation" once the command left). */
+    private val setNote: (String) -> Unit,
     private val scope: CoroutineScope,
     private val clock: () -> Long,
 ) : PocketControlPort {
@@ -135,6 +137,8 @@ internal class MultiviewTileControl(
                     event = ControlWireEvent.NOT_SENT
                     return@launch
                 }
+                // As iOS: each camera shows its wait at send; the outcome replaces it.
+                setNote(RecordAll.WAITING)
                 onStage?.invoke(ControlWireEvent.SENT)
                 // The stage's shared window (OpenCine `MultiviewRecordConfirmation`), on this port's clock.
                 event = when (

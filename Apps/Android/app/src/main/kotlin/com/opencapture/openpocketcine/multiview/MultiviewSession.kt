@@ -184,6 +184,7 @@ class MultiviewSession(
                 }
             },
             setBusy = { recordingBusy = it },
+            setNote = { recordingNote = it },
             scope = scope,
             clock = SystemClock::elapsedRealtime,
         )

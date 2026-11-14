@@ -120,7 +120,7 @@ class MultiviewTileReadoutsTest {
             CameraModel(name = "Osmo Nano", family = "nano", verified = true))) {
             var state = TileRecordState(model = model)
             val control = DjiCameraSessionAdapter(MultiviewTileControl(
-                state = { state }, send = { true }, reply = { null }, setBusy = {},
+                state = { state }, send = { true }, reply = { null }, setBusy = {}, setNote = {},
                 scope = backgroundScope, clock = { 0L }), backgroundScope)
             assertNull(control.tileTimecodeReadout())
             state = state.copy(timecode = CameraTimecode(1, 2, 3, 4))
