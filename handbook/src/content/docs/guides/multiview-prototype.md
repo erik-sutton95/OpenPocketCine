@@ -41,8 +41,8 @@ joins. Hotspot availability depends on the device and mobile plan. iOS does not
 supply the hotspot password to the app. This path remains experimental pending
 physical validation. See [Apple's hotspot setup](https://support.apple.com/en-ie/guide/iphone/iph45447ca6/ios).
 
-Discovery checks the phone's actual IPv4 subnet, with up to 24 simultaneous
-connection probes and two search passes. It excludes cameras already assigned
+Discovery checks the phone's actual IPv4 subnet, with up to 64 simultaneous
+connection probes on iPhone and iPad (24 on Android) and two search passes. It excludes cameras already assigned
 to other tiles. A responding address is accepted only if its camera identity
 matches the identity read over Bluetooth. Search is limited to networks with at
 most 1,022 usable addresses and at most eight service candidates per pass.
@@ -336,6 +336,8 @@ recording, recovery and cleanup behavior described above. The differences:
   on a Pocket 4 Pro that had just returned to its own Wi-Fi.
 - Returning from a tile's Live View rebuilds each tile's decoder and requests a
   keyframe, because every tile gets a new video surface.
+- Camera discovery tries 24 addresses at a time instead of 64.
+- A tile's picture is repaired only while its video surface is on screen.
 
 Physically checked on a Galaxy S25 (2026-09-23) with a Pocket 4 Pro and a Nano on
 the phone's hotspot: setup, provisioning, identity-verified discovery, preview,

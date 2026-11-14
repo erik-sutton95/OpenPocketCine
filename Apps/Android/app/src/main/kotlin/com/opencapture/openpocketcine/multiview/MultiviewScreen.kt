@@ -55,6 +55,7 @@ import com.opencapture.monitorui.MultiviewArrangement
 import com.opencapture.monitorui.MultiviewPresentationLayout
 import com.opencapture.monitorui.MultiviewSafeArea
 import com.opencapture.opencine.appkit.LocalOperatorHaptics
+import com.opencapture.opencine.appkit.MultiviewCameraAction
 import com.opencapture.opencine.appkit.MultiviewCameraPicker
 import com.opencapture.opencine.appkit.MultiviewPickerRow
 import com.opencapture.opencine.appkit.MultiviewStage
@@ -107,10 +108,8 @@ fun MultiviewScreen(model: AppModel, session: MultiviewSession, onClose: () -> U
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_RESUME -> session.setApplicationActive(true)
-                Lifecycle.Event.ON_PAUSE -> {
-                    session.setApplicationActive(false)
-                    cameraSettings = false
-                }
+                // As iOS: the settings editor stays open; the stage admits no change until the return.
+                Lifecycle.Event.ON_PAUSE -> session.setApplicationActive(false)
                 else -> Unit
             }
         }
@@ -296,13 +295,13 @@ internal fun MultiviewStageContent(
             perform = { action, slot ->
                 val tile = session.tiles[slot]
                 when (action) {
-                    MultiviewTileAction.LUT -> {
+                    MultiviewCameraAction.LUT -> {
                         tile.toggleLUT()
                         session.persistStage()
                     }
-                    MultiviewTileAction.RECONNECT -> scope.launch { session.reconnect(tile) }
-                    MultiviewTileAction.EXPERIMENTAL -> scope.launch { session.tryExperimentalNetwork(tile) }
-                    MultiviewTileAction.REMOVE -> session.remove(tile)
+                    MultiviewCameraAction.RECONNECT -> scope.launch { session.reconnect(tile) }
+                    MultiviewCameraAction.EXPERIMENTAL -> scope.launch { session.tryExperimentalNetwork(tile) }
+                    MultiviewCameraAction.REMOVE -> session.remove(tile)
                 }
             },
             close = onExit,

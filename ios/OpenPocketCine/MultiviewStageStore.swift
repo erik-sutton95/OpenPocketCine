@@ -14,20 +14,9 @@ enum MultiviewQualificationPolicy {
     }
 }
 
-extension MultiviewStageJournal.Stage {
-    /// The stage when it is safe to restore with this app's tile count.
-    var validated: Self? { validated(tileCount: MultiviewQualificationPolicy.tileCount) }
-}
-
 /// Device-only stage metadata. Network credentials stay in MultiviewNetworkStore. The values and
 /// rules are OpenCine's `MultiviewStageJournal`; this keeps the Keychain and this app's tile count.
 enum MultiviewStageStore {
-    typealias Camera = MultiviewStageJournal.Camera
-    typealias Stage = MultiviewStageJournal.Stage
-
-    static func cleanupTargets(_ pending: [Camera], including cameras: [Camera]) -> [Camera] {
-        MultiviewStageJournal.cleanupTargets(pending, including: cameras)
-    }
     private static var query: [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
@@ -35,7 +24,7 @@ enum MultiviewStageStore {
             kSecAttrAccount as String: "stage",
         ]
     }
-    static func load() -> Stage? {
+    static func load() -> MultiviewStageJournal.Stage? {
         var q = query
         q[kSecReturnData as String] = true
         q[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -43,14 +32,16 @@ enum MultiviewStageStore {
         guard SecItemCopyMatching(q as CFDictionary, &value) == errSecSuccess,
             let data = value as? Data
         else { return nil }
-        return (try? JSONDecoder().decode(Stage.self, from: data))?.validated
+        return (try? JSONDecoder().decode(MultiviewStageJournal.Stage.self, from: data))?
+            .validated(tileCount: MultiviewQualificationPolicy.tileCount)
     }
-    @discardableResult static func save(_ stage: Stage?) -> Bool {
+    @discardableResult static func save(_ stage: MultiviewStageJournal.Stage?) -> Bool {
         guard let stage else {
             let deleted = SecItemDelete(query as CFDictionary)
             return deleted == errSecSuccess || deleted == errSecItemNotFound
         }
-        guard stage.validated != nil, let data = try? JSONEncoder().encode(stage) else {
+        guard stage.validated(tileCount: MultiviewQualificationPolicy.tileCount) != nil,
+            let data = try? JSONEncoder().encode(stage) else {
             return false
         }
         let attributes: [String: Any] = [

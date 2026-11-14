@@ -297,13 +297,17 @@ jobs:
         env:
           TEST_RUNNER_CI: "true"
           SKIP: ${{ inputs.full && 'MonitorPortraitHeaderClearanceTests/testCompactDeclaredGaugeRetainsClearanceWhenSafeTopChanges' || 'MonitorPortraitHeaderClearanceTests' }}
+          # Quarantined tests (docs/ci.md QUARANTINE) run only in the nightly tier.
+          QUARANTINE: ${{ !inputs.full && 'MultiviewStageTests/testLeavingBorrowedLiveViewCancelsProgrammedMove' || '' }}
         run: |
           set -euo pipefail
           device_id="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ && !found { print $2; found = 1 }')"
+          quarantined=()
+          if [ -n "$QUARANTINE" ]; then quarantined=("-skip-testing:OpenPocketCineTests/$QUARANTINE"); fi
           xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCine \
             -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath ~/ci-dd \
             -parallel-testing-enabled NO -resultBundlePath "$RUNNER_TEMP/native-ios/OpenPocketCine.xcresult" \
-            "-skip-testing:OpenPocketCineTests/$SKIP" test-without-building
+            "-skip-testing:OpenPocketCineTests/$SKIP" ${quarantined[@]+"${quarantined[@]}"} test-without-building
       - name: Build the Watch companion (watchOS Simulator)
         run: |
           xcodebuild -project ios/OpenPocketCine.xcodeproj -scheme OpenPocketCineWatch \

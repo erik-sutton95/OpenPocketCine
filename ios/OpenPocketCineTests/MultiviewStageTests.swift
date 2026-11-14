@@ -1,3 +1,4 @@
+import Observation
 import OpenCineCore
 import OpenCineHostedTestSupport
 import OpenPocketViewCore
@@ -88,6 +89,21 @@ import OpenCineDJIApple
         session.tiles[1].recordingBusy = true
         XCTAssertFalse(session.canRecordTogether)
     }
+    func testRecordingFlipRefreshesTheStageByItself() {
+        let session = MultiviewSession()
+        let tile = session.tiles[0]
+        assign(tile, recording: false, available: true)
+        let changed = ObservationFlag()
+        withObservationTracking {
+            _ = session.anyRecording
+            _ = session.coordinator.recordingActive(slot: 0)
+        } onChange: {
+            changed.set()
+        }
+        tile.recordingObservation = (true, Date())
+        XCTAssertTrue(
+            changed.value, "the border, lamp and Stop/Start follow the camera's REC flip itself")
+    }
     func testMemberLinkStatusShowsPocketsTileCopyAndTheSessionOwnsTheControlHost() {
         let session = MultiviewSession()
         let tile = session.tiles[0]
@@ -131,35 +147,8 @@ import OpenCineDJIApple
         XCTAssertTrue(nano.lutEnabled)
     }
 
-    func testRecoveryDoesNotResetHealthyVideoForStalePresentation() {
-        var recovery = MultiviewRecovery()
-        let snapshot = FeedWatchdog.Snapshot(
-            now: 100, lastDecodedFrameAge: 20, lastVideoPacketAge: 0.01,
-            lastStatusAge: 0.1, flowHealthy: true, pathReady: true, hasFormat: true,
-            decoderFailed: false, live: true, sawPicture: true,
-            secondsSinceLastEnable: 50)
-        XCTAssertEqual(recovery.action(snapshot), .none)
-    }
-    func testFirstPictureFailureEscalatesBeyondBaseCooldown() {
-        var recovery = MultiviewRecovery()
-        func snapshot(_ time: Double) -> FeedWatchdog.Snapshot {
-            FeedWatchdog.Snapshot(
-                now: time, lastDecodedFrameAge: nil, lastVideoPacketAge: nil,
-                lastStatusAge: nil, flowHealthy: true, pathReady: true, hasFormat: false,
-                decoderFailed: false, live: true, sawPicture: false, hadVideo: false,
-                secondsSinceLastEnable: 50)
-        }
-        XCTAssertEqual(recovery.action(snapshot(100)), .resendLiveViewEnable)
-        XCTAssertEqual(recovery.action(snapshot(110)), .reopenDatalink)
-        XCTAssertEqual(recovery.action(snapshot(120)), .none)
-        var noNetwork = snapshot(130)
-        noNetwork.pathReady = false
-        XCTAssertEqual(recovery.action(noNetwork), .none)
-        var recentEnable = snapshot(130)
-        recentEnable.secondsSinceLastEnable = 1
-        XCTAssertEqual(recovery.action(recentEnable), .none)
-        XCTAssertEqual(recovery.action(snapshot(130)), .fullSessionRejoin)
-    }
+    // The DJI recovery ladder's own tests live with it in OpenCine (OpenCineDJITests'
+    // `MultiviewRecoveryTests`) since Shared Multiview Plan 3.
 
     func testBorrowedLiveViewDoesNotOwnOrCloseTileTransport() {
         let tile = MultiviewSession.Tile()
@@ -251,4 +240,12 @@ import OpenCineDJIApple
         next.close()
     }
 
+}
+
+/// Set once by an observation's `onChange`.
+private final class ObservationFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var isSet = false
+    var value: Bool { lock.withLock { isSet } }
+    func set() { lock.withLock { isSet = true } }
 }

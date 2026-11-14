@@ -78,89 +78,32 @@ struct MultiviewTelemetryPresentation {
 }
 
 extension MultiviewSession {
-    /// The shared stage's values for one slot, `nil` while it is empty.
+    /// The shared stage's values for one slot, `nil` while it is empty: Pocket's camera readings
+    /// with the tally, notes, status and options the stage owns.
     func stageTile(_ index: Int) -> MultiviewTile? {
         let tile = tiles[index]
         guard let camera = tile.camera else { return nil }
         let power = tile.control.current.power
         let values = MultiviewTelemetryPresentation(
             settings: tile.settings, power: power, storageObservation: tile.control.current.storage)
-        let preview = camera.hasMultiviewPreview
-        let settled = !busy && !tile.connecting && !tile.recovering
-        var actions = [
-            MultiviewCameraAction(
-                MultiviewCameraAction.liveView, "Live View",
-                enabled: tile.controlHost != nil && !tile.recovering),
-            MultiviewCameraAction(
-                MultiviewTileAction.record,
-                tile.recordingActive == true ? "Stop recording" : "Start recording",
-                kind: .record,
-                enabled: tile.recordingAvailable && !tile.recordingBusy && !groupRecordingBusy
-                    && !closing),
-            MultiviewCameraAction(
-                MultiviewTileAction.lut, tile.lutEnabled ? "Disable Auto LUT" : "Enable Auto LUT",
-                enabled: preview),
-        ]
-        if preview || tile.failureMessage != nil {
-            actions.append(
-                .init(MultiviewTileAction.reconnect, "Reconnect", enabled: settled, closes: true))
-        }
-        if tile.failureMessage != nil, !tile.experimentalNetwork, tile.identity == nil {
-            actions.append(
-                .init(
-                    MultiviewTileAction.experimental, "Try experimental shared Wi-Fi",
-                    enabled: settled, closes: true))
-        }
-        actions.append(
-            .init(
-                MultiviewTileAction.remove, "Remove camera", kind: .destructive,
-                enabled: !(busy || tile.connecting || groupRecordingBusy || tile.recordingBusy
-                    || closing)))
-        let note = tile.recordingNote
-        let showsStatus = !tile.hasPicture || tile.failureMessage != nil || tile.recovering
-        return MultiviewTile(
-            name: camera.name, model: camera.model.name, format: values.format,
-            storage: values.storage,
-            timecode: tile.timecodeReadout,
-            tally: MultiviewTelemetryPresentation.recordingStatus(tile),
-            recording: tile.recordingActive == true, lut: tile.lutEnabled, note: note,
-            tileNote: note == "Recording" || note == "Recording stopped" ? nil : note,
-            readouts: values.readouts,
-            status: showsStatus
-                ? MultiviewTileStatus(
-                    text: tile.recovering
-                        ? "Restoring picture…"
-                        : tile.failureMessage == nil ? tile.status : "Connection failed · Options",
-                    detail: tile.failureMessage ?? tile.status,
-                    inProgress: tile.recovering
-                        || (tile.failureMessage == nil && !tile.networkVerified))
-                : nil,
-            detail: tile.status, failure: tile.failureMessage,
-            footnote: tile.networkVerified && !preview
-                ? "Remove this camera to enable group recording for your other cameras." : nil,
-            actions: actions, accessibilityValue: tile.previewAccessibilityValue
-        ).withPower(power)
+        return coordinator.tile(
+            index,
+            MultiviewTileReadings(
+                name: camera.name, model: camera.model.name, format: values.format,
+                storage: values.storage, timecode: tile.timecodeReadout, readouts: values.readouts,
+                recordingSeconds: tile.settings.recordElapsedSec, power: power,
+                hasPicture: tile.hasPicture, accessibilityValue: tile.previewAccessibilityValue))
     }
 
     /// The record plan for every camera (`nil`) or one slot, with what blocks it now.
     func recordContext(slot: Int?) -> MultiviewRecordContext {
-        MultiviewRecordContext(session: self, tile: slot.map { tiles[$0] })
+        coordinator.recordContext(slot: slot)
     }
-}
-
-/// Pocket's camera option ids beside the shared Live View id.
-enum MultiviewTileAction {
-    static let record = "record"
-    static let lut = "lut"
-    static let reconnect = "reconnect"
-    static let experimental = "experimental"
-    static let remove = "remove"
 }
 
 extension MultiviewRecordContext {
     @MainActor init(session: MultiviewSession, tile: MultiviewSession.Tile? = nil) {
-        self.init(
-            plan: session.recordPlan(for: tile), busy: session.busy || session.groupRecordingBusy,
-            closing: session.closing)
+        self = session.recordContext(
+            slot: tile.flatMap { tile in session.tiles.firstIndex { $0 === tile } })
     }
 }

@@ -41,10 +41,11 @@ Tests with a known hosted flake run only in the nightly tier, each with an open 
 `ci-quarantine`). There are no accepted reds in pull requests: fix the failure, or quarantine
 the test here with its issue in the same pull request.
 
-No test is quarantined now. Add a row per quarantined test:
+Add a row per quarantined test (the Native Swift/iOS job's `QUARANTINE` skips it in the PR tier):
 
 | Test | Job | Issue |
 | --- | --- | --- |
+| `MultiviewStageTests/testLeavingBorrowedLiveViewCancelsProgrammedMove` | Native Swift/iOS, unit tests | #661 |
 
 A test leaves quarantine after its issue is fixed and several consecutive nightlies pass.
 

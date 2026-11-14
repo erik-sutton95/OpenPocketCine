@@ -53,6 +53,47 @@ The Android instrumentation tests drive the shared stage; on the lane emulator
 the same 9 of 19 pass before and after. Physical Multiview remains untested
 for this change on both platforms.
 
+### Shared Multiview coordinator (Plan 3)
+
+Both `MultiviewSession`s are adapters over OpenCine's `MultiviewCoordinator`
+and its `MultiviewHost`; the stage's rules are the iOS session's. iOS changes
+only where the plan settled a rule: a camera already in Multiview ends the
+search at once with "This camera is already in Multiview." (before, the search
+went on and ended "Could not find this camera"), and an invalid network name or
+password now reads "Check the network name and password." instead of a system
+error. Not visible on iOS: probe answers are tried in address order (before,
+in answer order), still at most eight. Android moves to iOS:
+
+- Tile copy and options: a failed tile reads **Connection failed · Options**,
+  a connecting one its link status (Connecting normal preview, Waiting for
+  video); **Live View** (not while the picture is restored), record enabled
+  while the camera's record state is fresh, Auto LUT only on cameras with a
+  preview, Reconnect on preview cameras and failures, and the network-only
+  footnote "Remove this camera to enable group recording for your other
+  cameras." The failure card's buttons follow iOS's options order (Reconnect,
+  Try experimental shared Wi-Fi, Remove camera; before, Try experimental came
+  first), and Remove stays available during a repair, as on iOS.
+- A camera already in Multiview ends the search at once with "This camera is
+  already in Multiview.", also when a rejoin finds it in another tile.
+- Bluetooth discovery stops while the stage is full, or in the background with
+  nothing connecting.
+- The settings editor follows iOS's rule: it needs the camera's record state
+  under 3 s old and no record command or Record all in flight (it closes and
+  retires queued changes around a record press), no longer refuses on a failure
+  message, closes when its camera connects, recovers or changes control path,
+  and stays open in the background (no change reaches the camera until the
+  return).
+- The network check is iOS's (name 1 to 32 bytes, password at most 63).
+
+Record all still writes "Waiting for camera confirmation" on each targeted
+tile, now at each camera's send as iOS does. Android keeps on purpose, as the
+handbook's Android differences name them: 24 probes a batch, the early identity
+read (kept through a lost join reply so Reconnect only searches again), the
+decoder rebuild after Live View and repair only while a tile surface is
+mounted. The instrumentation tests drive the adapter (a test-only tile reset,
+the background test on iOS's rule); they compile but were not run on a device.
+Physical Multiview remains untested for this change on both platforms.
+
 ### Multiview AUDIO admission continuation
 
 Android's Multiview settings categories now require the tile's typed AUDIO control to be

@@ -1,6 +1,7 @@
 package com.opencapture.openpocketcine.multiview
 
 import com.opencapture.monitorui.MonitorTimecodeFormat
+import com.opencapture.opencine.appkit.MultiviewRecordConfirmation
 import com.opencapture.opencine.appkit.label
 import com.opencapture.opencine.multicam.RecordAll
 import com.opencapture.opencine.core.CameraSession
@@ -8,6 +9,7 @@ import com.opencapture.opencine.core.CameraSessionID
 import com.opencapture.opencine.core.ControlAuthority
 import com.opencapture.opencine.core.MonitorEntryDescriptor
 import com.opencapture.opencine.core.MonitorEntryID
+import com.opencapture.opencine.core.MultiviewRecordReport
 import com.opencapture.opencine.core.PictureHealth
 import com.opencapture.opencine.core.PictureSourceDescriptor
 import com.opencapture.opencine.core.StreamID
@@ -24,8 +26,8 @@ import com.opencapture.opencine.core.CameraTimecode
 import com.opencapture.opencine.vocabulary.CameraModel
 import com.opencapture.opencine.vocabulary.ConnectionPhase
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 /** What a tile's record seam reads from it (iOS `MultiviewTileControl.status` and `link`). */
 internal data class TileRecordState(
@@ -70,6 +72,8 @@ internal class MultiviewTileControl(
     /** Reply to the record command received at or after `since`: `true` ACK, `false` NACK. */
     private val reply: (since: Long) -> Boolean?,
     private val setBusy: (Boolean) -> Unit,
+    /** Writes the tile's record note ("Waiting for camera confirmation" once the command left). */
+    private val setNote: (String) -> Unit,
     private val scope: CoroutineScope,
     private val clock: () -> Long,
 ) : PocketControlPort {
@@ -133,28 +137,23 @@ internal class MultiviewTileControl(
                     event = ControlWireEvent.NOT_SENT
                     return@launch
                 }
+                // As iOS: each camera shows its wait at send; the outcome replaces it.
+                setNote(RecordAll.WAITING)
                 onStage?.invoke(ControlWireEvent.SENT)
-                var acknowledged = false
-                while (clock() < sent + confirmationWindowMs) {
-                    delay(100)
-                    val tile = state()
-                    if (tile.link !== link) return@launch
-                    when (reply(sent)) {
-                        false -> {
-                            event = ControlWireEvent.REFUSED
-                            return@launch
-                        }
-                        true -> if (!acknowledged) {
-                            acknowledged = true
-                            onStage?.invoke(ControlWireEvent.ACKNOWLEDGED)
-                        }
-                        null -> Unit
-                    }
-                    val observation = tile.observation
-                    if (observation != null && observation.second > sent && observation.first == start) {
-                        event = ControlWireEvent.CONFIRMED
-                        return@launch
-                    }
+                // The stage's shared window (OpenCine `MultiviewRecordConfirmation`), on this port's clock.
+                event = when (
+                    MultiviewRecordConfirmation.wait(
+                        start = start, sentAtMillis = sent, clock = clock,
+                        current = { state().link === link },
+                        reply = { reply(sent) },
+                        report = { state().observation?.let { MultiviewRecordReport(it.first, it.second) } },
+                        acknowledged = { onStage?.invoke(ControlWireEvent.ACKNOWLEDGED) },
+                        window = confirmationWindowMs.milliseconds,
+                    )
+                ) {
+                    MultiviewRecordConfirmation.Outcome.CONFIRMED -> ControlWireEvent.CONFIRMED
+                    MultiviewRecordConfirmation.Outcome.REFUSED -> ControlWireEvent.REFUSED
+                    MultiviewRecordConfirmation.Outcome.UNCONFIRMED -> ControlWireEvent.UNCONFIRMED
                 }
             } finally {
                 setBusy(false)

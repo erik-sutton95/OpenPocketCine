@@ -255,8 +255,12 @@ session, and no additional decoder or preview-enable path is created.
 Per-camera options remain available inside every occupied tile, including the
 smaller portrait feeds. One tap selects without changing the arrangement.
 Clean hides the upper session controls and assist palette while retaining DISP
-to restore them. Per-tile recovery, recording acknowledgement and station-network cleanup
-remain in `MultiviewSession`. Its current shared assist control applies Auto LUT
+to restore them. Adding, discovery, Reconnect, Remove, the per-tile repair
+guards and rejoin budget, record on all cameras and station-network cleanup
+are OpenCine's `MultiviewCoordinator`; `MultiviewSession` adapts it (each tile
+is the coordinator's `MultiviewMemberLink` and forwards its state to a
+`MultiviewMember`, the session is its `MultiviewHost`) and keeps the DJI link,
+its watchdog ladder and the record wire. Its current shared assist control applies Auto LUT
 through the existing per-camera LUT operation, enabled by default for newly
 added cameras. Tile batteries and HH:MM:SS timecode reuse Live View presentation.
 Camera options use bounded floating monitor components. Camera settings opens

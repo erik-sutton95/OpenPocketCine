@@ -279,13 +279,13 @@ struct MultiviewView: View {
     private func perform(_ action: String, _ slot: Int) {
         let tile = session.tiles[slot]
         switch action {
-        case MultiviewTileAction.lut:
+        case MultiviewCameraAction.lut:
             tile.toggleLUT()
             session.persistStage()
-        case MultiviewTileAction.reconnect: Task { await session.reconnect(tile) }
-        case MultiviewTileAction.experimental: Task { await session.tryExperimentalNetwork(tile) }
+        case MultiviewCameraAction.reconnect: Task { await session.reconnect(tile) }
+        case MultiviewCameraAction.experimental: Task { await session.tryExperimentalNetwork(tile) }
         // A removed camera's options close with it.
-        case MultiviewTileAction.remove: Task { _ = await session.remove(tile) }
+        case MultiviewCameraAction.remove: Task { _ = await session.remove(tile) }
         default: break
         }
     }
