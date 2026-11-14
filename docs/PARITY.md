@@ -53,6 +53,36 @@ The Android instrumentation tests drive the shared stage; on the lane emulator
 the same 9 of 19 pass before and after. Physical Multiview remains untested
 for this change on both platforms.
 
+### Shared Multiview coordinator (Plan 3)
+
+Both `MultiviewSession`s are adapters over OpenCine's `MultiviewCoordinator`
+and its `MultiviewHost`; the stage's rules are the iOS session's. iOS changes
+only where the plan settled a rule: a camera already in Multiview ends the
+search at once with "This camera is already in Multiview." (before, the search
+went on and ended "Could not find this camera"), and an invalid network name or
+password now reads "Check the network name and password." instead of a system
+error. Android moves to iOS:
+
+- Tile copy and options: a failed tile reads **Connection failed · Options**,
+  a connecting one its link status (Connecting normal preview, Waiting for
+  video); **Live View** (not while the picture is restored), record enabled
+  while the camera's record state is fresh, Auto LUT only on cameras with a
+  preview, Reconnect on preview cameras and failures, and the network-only
+  footnote "Remove this camera to enable group recording for your other
+  cameras." The status card keeps its buttons (Try experimental, Reconnect,
+  Remove camera).
+- Bluetooth discovery stops while the stage is full, or in the background with
+  nothing connecting; Record all no longer writes "Waiting for camera
+  confirmation" on each tile before the outcomes; a settings editor closes when
+  its camera connects, recovers or changes control path, not on backgrounding;
+  a failure found while the camera joins ends the add (Reconnect retries).
+- The network check is iOS's (name 1 to 32 bytes, password at most 63).
+
+Android keeps on purpose: 24 probes a batch, the early identity read (kept
+through a lost join reply so Reconnect only searches again), the decoder
+rebuild after Live View and repair only while a tile surface is mounted.
+Physical Multiview remains untested for this change on both platforms.
+
 ### Multiview AUDIO admission continuation
 
 Android's Multiview settings categories now require the tile's typed AUDIO control to be
