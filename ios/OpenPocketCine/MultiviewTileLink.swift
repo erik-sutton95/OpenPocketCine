@@ -10,7 +10,7 @@ import OpenPocketViewCore
 extension MultiviewSession.Tile: MultiviewMemberLink {
     typealias Camera = DjiAppleSighting
 
-    var session: any CameraSession { control }
+    var session: any OpenCineCore.CameraSession { control }
 
     func probe(_ address: String, hotspot: Bool) async -> Bool {
         await DjiAppleNetworkDiscovery().probe(address, hotspot: hotspot)

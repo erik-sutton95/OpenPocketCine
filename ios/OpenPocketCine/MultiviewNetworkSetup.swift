@@ -1,6 +1,7 @@
 import MonitorUI
 import OpenCineAppKit
 import OpenCineAppKitApple
+import OpenCineCore
 import SwiftUI
 
 /// Multiview supplies session ownership to the same wizard used by Add setup.
