@@ -529,7 +529,7 @@ final class AppModel {
                 self.cameras.upsert(
                     DJIIntegration.stamping(current, movingTo: .infrastructureNetwork))
             }
-            try await MultiviewProvisioner.scanNetworks(found, onFound: onFound)
+            try await DjiAppleMultiviewProvisioner.scanNetworks(found, host: .pocket, onFound: onFound)
         }
     }
 

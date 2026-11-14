@@ -88,6 +88,26 @@ import OpenCineDJIApple
         session.tiles[1].recordingBusy = true
         XCTAssertFalse(session.canRecordTogether)
     }
+    func testMemberLinkStatusShowsPocketsTileCopyAndTheSessionOwnsTheControlHost() {
+        let session = MultiviewSession()
+        let tile = session.tiles[0]
+        tile.cameraAddress = "192.0.2.41"
+        tile.failureMessage = "Could not restore preview. Tap Reconnect to try again."
+        tile.onStatus?(.opening)
+        XCTAssertEqual(tile.status, "Connecting normal preview")
+        XCTAssertNil(tile.controlHost, "Opening is not yet control")
+        tile.onStatus?(.controlling)
+        XCTAssertEqual(tile.controlHost, "192.0.2.41", "The session records the address it opened")
+        XCTAssertNil(tile.failureMessage)
+        XCTAssertEqual(tile.status, "Connecting normal preview")
+        tile.onStatus?(.awaitingPicture)
+        XCTAssertEqual(tile.status, "Waiting for video")
+        tile.onStatus?(.live)
+        XCTAssertEqual(tile.status, "Live · Video mode")
+        tile.onStatus?(.reconnecting)
+        XCTAssertEqual(tile.status, "Reconnecting…")
+    }
+
     func testChangingNetworkClearsUnrelatedPassword() {
         let session = MultiviewSession()
         session.ssid = "Old test network"
