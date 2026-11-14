@@ -108,10 +108,8 @@ fun MultiviewScreen(model: AppModel, session: MultiviewSession, onClose: () -> U
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_RESUME -> session.setApplicationActive(true)
-                Lifecycle.Event.ON_PAUSE -> {
-                    session.setApplicationActive(false)
-                    cameraSettings = false
-                }
+                // As iOS: the settings editor stays open; the stage admits no change until the return.
+                Lifecycle.Event.ON_PAUSE -> session.setApplicationActive(false)
                 else -> Unit
             }
         }
