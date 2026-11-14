@@ -13,7 +13,10 @@ import UIKit
 final class MultiviewSession {
     let backdropRenderer = MonitorVideoBackdropRenderer()
     @MainActor @Observable final class Tile: Identifiable {
-        let id = UUID()
+        let id: UUID
+        /// The stage's half of this tile (camera, copy, control host, record state, recovery
+        /// budget), owned by OpenCine's `MultiviewCoordinator`; the properties below forward to it.
+        let member: MultiviewMember<DjiAppleSighting>
         let decoder = HevcDecoder()
         /// This tile's camera as a common session (MULTI-02): one per tile for its lifetime, so
         /// selection, layout and rotation never change it. Its control epoch advances when the
@@ -21,7 +24,7 @@ final class MultiviewSession {
         let control: DJICameraSessionAdapter
         let controlPort: MultiviewTileControl
         /// The tile's picture stream, named for the multicam engine.
-        let stream = StreamID()
+        var stream: StreamID { member.stream }
         var liveModel: AppModel?
         // A settings editor borrows only the command/status path. It never owns the feed.
         var controlsModel: AppModel?
@@ -45,34 +48,56 @@ final class MultiviewSession {
                 if driver !== oldValue { control.linkDidChange() }
             }
         }
-        var connecting = false { didSet { if connecting { retireControls() } } }
-        var experimentalNetwork = false
-        var networkVerified = false
-        var cameraAddress = ""
-        var identity: [UInt8]?
+        var connecting: Bool {
+            get { member.connecting }
+            set { member.connecting = newValue }
+        }
+        var experimentalNetwork: Bool {
+            get { member.experimental }
+            set { member.experimental = newValue }
+        }
+        var networkVerified: Bool {
+            get { member.networkVerified }
+            set { member.networkVerified = newValue }
+        }
+        var cameraAddress: String {
+            get { member.address }
+            set { member.address = newValue }
+        }
+        var identity: [UInt8]? {
+            get { member.identity }
+            set { member.identity = newValue }
+        }
         // Per ACK frame bookkeeping; no view reads it.
         @ObservationIgnored var responses: [UInt16: Duml.Frame] = [:]
         var camera: DjiAppleSighting? {
-            didSet {
-                if camera?.id != oldValue?.id {
-                    retireControls()
-                    control.linkDidChange()
-                }
-            }
+            get { member.camera }
+            set { member.camera = newValue }
         }
-        var status = "Add camera"
-        var failureMessage: String?
+        var status: String {
+            get { member.status }
+            set { member.status = newValue }
+        }
+        var failureMessage: String? {
+            get { member.failureMessage }
+            set { member.failureMessage = newValue }
+        }
+        /// DJI's own feed-watchdog ladder on this tile's link; the rejoin budget is the member's.
         var recovery = MultiviewRecovery()
-        @ObservationIgnored var repairTask: Task<Void, Never>?
-        var recovering = false { didSet { if recovering { retireControls() } } }
-        var pathLostAt: Date?
+        var recovering: Bool {
+            get { member.recovering }
+            set { member.recovering = newValue }
+        }
         var checkForegroundDecoder = false
         var settings = CameraStatus()
         @ObservationIgnored var pose = GimbalStickMapping()
         @ObservationIgnored var latestSettings = CameraStatus()
         @ObservationIgnored var settingsPublishedAt = Date.distantPast
         let sampleBus = LiveFrameSampleBus()
-        var lutEnabled = true
+        var lutEnabled: Bool {
+            get { member.lutEnabled }
+            set { member.lutEnabled = newValue }
+        }
         var effects = MonitorFrameEffects()
         var lutCaption = "Auto LUT"
 
@@ -183,16 +208,31 @@ final class MultiviewSession {
             }
             return true
         }
-        var publishing = false
+        var publishing: Bool {
+            get { member.publishing }
+            set { member.publishing = newValue }
+        }
         /// The member link's own record that its control link is up (it reported `controlling`);
         /// the session's `controlHost` follows it.
         @ObservationIgnored var controlLinkUp = false
         /// Where the member link reports its status; the session maps it to the tile's copy.
         @ObservationIgnored var onStatus: (@MainActor (MultiviewLinkStatus) -> Void)?
-        var recordingBusy = false
-        var recordingAvailable = false
-        var recordingNote: String?
-        var controlHost: String? { didSet { if controlHost != oldValue { retireControls() } } }
+        var recordingBusy: Bool {
+            get { member.recordingBusy }
+            set { member.recordingBusy = newValue }
+        }
+        var recordingAvailable: Bool {
+            get { member.recordingAvailable }
+            set { member.recordingAvailable = newValue }
+        }
+        var recordingNote: String? {
+            get { member.recordingNote }
+            set { member.recordingNote = newValue }
+        }
+        var controlHost: String? {
+            get { member.controlHost }
+            set { member.controlHost = newValue }
+        }
         /// Stamped per 0x02/0x80 frame. Views read `recordingActive`, which
         /// only changes on a REC flip, instead of re-rendering per timestamp.
         @ObservationIgnored var recordingObservation: (active: Bool, received: Date)? {
@@ -204,6 +244,8 @@ final class MultiviewSession {
         }
         private(set) var recordingActive: Bool?
         init() {
+            id = UUID()
+            member = MultiviewMember(id: id)
             let port = MultiviewTileControl()
             controlPort = port
             control = DJICameraSessionAdapter(session: port)
@@ -311,31 +353,76 @@ final class MultiviewSession {
 
         var previewStarted: Date?
     }
-    let tiles = (0..<MultiviewQualificationPolicy.tileCount).map { _ in Tile() }
-    var found: [DjiAppleSighting] = []
-    var busy = false
-    var ready = false
-    var ssid = ""
-    var usePhoneHotspot = false
-    var password = ""
-    var groupRecordingBusy = false
-    var groupRecordingNote: String?
-    /// Settings-editor leases (OpenCineMulticam): one per open editor, asked before every SET.
-    @ObservationIgnored var editorLeases = EditorLeases()
-    var recordingTiles: [Tile] { tiles.filter { $0.camera != nil } }
-    var anyRecording: Bool { recordingTiles.contains { $0.recordingActive == true } }
-    var canRecordTogether: Bool { !busy && !groupRecordingBusy && recordPlan().isExecutable }
+    let tiles: [Tile]
+    /// The shared stage (OpenCine's `MultiviewCoordinator`): lifecycle, network, discovery, adds,
+    /// recovery budgets, record plans, editor leases, the journal and close. This session is its
+    /// host: the tiles' pictures, Live View, editors and background time are Pocket's.
+    @ObservationIgnored let coordinator: MultiviewCoordinator<Tile>
+    @ObservationIgnored private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
 
-    var networkConfigured = false
-    var configuringNetwork = false
-    var networkSetupError: String?
-    var applicationActive = true
-    @ObservationIgnored private var activityGeneration = 0
-    private var foregroundAt = Date.distantPast
-    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
-    var host = ""
-    var error: String?
-    let presentation = MultiviewStageState(slotCount: MultiviewQualificationPolicy.tileCount)
+    var found: [DjiAppleSighting] { coordinator.found }
+    var busy: Bool {
+        get { coordinator.busy }
+        set { coordinator.busy = newValue }
+    }
+    var ready: Bool {
+        get { coordinator.ready }
+        set { coordinator.ready = newValue }
+    }
+    var ssid: String {
+        get { coordinator.ssid }
+        set { coordinator.ssid = newValue }
+    }
+    var usePhoneHotspot: Bool {
+        get { coordinator.usePhoneHotspot }
+        set { coordinator.usePhoneHotspot = newValue }
+    }
+    var password: String {
+        get { coordinator.password }
+        set { coordinator.password = newValue }
+    }
+    var groupRecordingBusy: Bool {
+        get { coordinator.groupRecordingBusy }
+        set { coordinator.groupRecordingBusy = newValue }
+    }
+    var groupRecordingNote: String? {
+        get { coordinator.groupRecordingNote }
+        set { coordinator.groupRecordingNote = newValue }
+    }
+    /// Settings-editor leases (OpenCineMulticam): one per open editor, asked before every SET.
+    var editorLeases: EditorLeases {
+        get { coordinator.editorLeases }
+        set { coordinator.editorLeases = newValue }
+    }
+    var recordingTiles: [Tile] { tiles.filter { $0.camera != nil } }
+    var anyRecording: Bool { coordinator.anyRecording }
+    var canRecordTogether: Bool { coordinator.canRecordTogether }
+
+    var networkConfigured: Bool {
+        get { coordinator.networkConfigured }
+        set { coordinator.networkConfigured = newValue }
+    }
+    var configuringNetwork: Bool {
+        get { coordinator.configuringNetwork }
+        set { coordinator.configuringNetwork = newValue }
+    }
+    var networkSetupError: String? {
+        get { coordinator.networkSetupError }
+        set { coordinator.networkSetupError = newValue }
+    }
+    var applicationActive: Bool {
+        get { coordinator.applicationActive }
+        set { coordinator.applicationActive = newValue }
+    }
+    var host: String {
+        get { coordinator.hostAddress }
+        set { coordinator.hostAddress = newValue }
+    }
+    var error: String? {
+        get { coordinator.error }
+        set { coordinator.error = newValue }
+    }
+    var presentation: MultiviewStageState { coordinator.presentation }
     var layout: MultiviewLayout {
         get { presentation.layout == .grid ? .grid : .centerStage }
         set { presentation.layout = newValue == .grid ? .grid : .centerStage }
@@ -348,87 +435,147 @@ final class MultiviewSession {
         get { presentation.selected }
         set { presentation.selected = newValue }
     }
-    var closing = false
-    var connectingCameras: Bool { tiles.contains { $0.connecting } }
-    /// The phone's side of the shared network and DJI's camera setup, through OpenCine's seams.
-    let hostPath: any StationHostPath
-    private let commissioner: any StationCommissioner<DjiAppleSighting>
-    private let cameraPolicy = MultiviewCameraPolicy<DjiAppleSighting>.dji
-    private var searches: [UUID: DjiAppleNetworkDiscovery] = [:]
-    private var connectionTasks: [UUID: Task<Void, Never>] = [:]
-    private var hostJoin: Task<Void, Error>?
-    private var addressReservations: [String: UUID] = [:]
-    private var pendingReset: [MultiviewStageStore.Camera] = []
-    private var stationResetTasks: [UUID: Task<Bool, Never>] = [:]
-    private let resetCamera: ((MultiviewStageStore.Camera) async throws -> Bool)?
-    private let resetRetryDelay: () async -> Void
-    private let saveStage: (MultiviewStageStore.Stage?) -> Bool
-    private let loadNetwork: (String, Bool) -> MultiviewNetworkStore.Network?
-    private var cleanupJournalWritten = false
-    private let ble = DjiAppleBluetoothLink(allowsConcurrentCameras: true, host: .pocket)
-    private var scanTask: Task<Void, Never>?
-    private var networkScanTask: Task<Void, Error>?
-    private var discovering = false
-    private var monitor: Task<Void, Never>?
-    private var running = false
+    var closing: Bool {
+        get { coordinator.closing }
+        set { coordinator.closing = newValue }
+    }
+    var connectingCameras: Bool { coordinator.connectingCameras }
+    /// The phone's side of the shared network, through OpenCine's seam.
+    var hostPath: any StationHostPath { coordinator.hostPath }
+    var hasPendingCleanup: Bool { coordinator.hasPendingCleanup }
 
     init(
-        resetCamera: ((MultiviewStageStore.Camera) async throws -> Bool)? = nil,
+        resetCamera: ((MultiviewStageJournal.Camera) async throws -> Bool)? = nil,
         resetRetryDelay: @escaping () async -> Void = {
             try? await Task.sleep(for: .seconds(3))
         },
-        saveStage: @escaping (MultiviewStageStore.Stage?) -> Bool = MultiviewStageStore.save,
-        loadNetwork: @escaping (String, Bool) -> MultiviewNetworkStore.Network? =
+        saveStage: @escaping (MultiviewStageJournal.Stage?) -> Bool = MultiviewStageStore.save,
+        loadNetwork: @escaping (String, Bool) -> SharedNetworkStore.Network? =
             MultiviewNetworkStore.load(ssid:hotspot:)
     ) {
-        self.resetCamera = resetCamera
-        self.resetRetryDelay = resetRetryDelay
-        self.saveStage = saveStage
-        self.loadNetwork = loadNetwork
+        let tiles = (0..<MultiviewQualificationPolicy.tileCount).map { _ in Tile() }
+        self.tiles = tiles
         let hostPath = SharedWiFiPath()
-        self.hostPath = hostPath
-        commissioner = DJIStationCommissioner(
-            host: .pocket, hostPath: hostPath, retryDelay: resetRetryDelay)
-        for tile in tiles {
-            tile.onStatus = { [weak self, weak tile] status in
-                guard let self, let tile else { return }
-                self.show(status, on: tile)
-            }
+        let commissioner = MultiviewStationCommissioner(
+            base: DJIStationCommissioner(
+                host: .pocket, hostPath: hostPath, retryDelay: resetRetryDelay),
+            resetCamera: resetCamera, resetRetryDelay: resetRetryDelay)
+        coordinator = MultiviewCoordinator(
+            links: tiles, members: tiles.map(\.member), policy: .dji,
+            commissioner: commissioner,
+            scanner: MultiviewNearbyScanner(
+                ble: DjiAppleBluetoothLink(allowsConcurrentCameras: true, host: .pocket)),
+            hostPath: hostPath, describe: { commissioner.record($0) },
+            journal: MultiviewJournalStorage(
+                load: { MultiviewStageStore.load() }, save: { saveStage($0) }),
+            networks: MultiviewNetworkStorage(
+                password: { loadNetwork($0, $1)?.password },
+                save: {
+                    MultiviewNetworkStore.save(
+                        ssid: $0.ssid, password: $0.password, hotspot: $0.hotspot)
+                }),
+            budget: MultiviewQualificationPolicy.budget,
+            failureMessage: { djiConnectionFailureDescription($0, fallback: $0.localizedDescription) })
+        coordinator.host = self
+    }
+
+    private func slot(_ tile: Tile) -> Int {
+        guard let slot = tiles.firstIndex(where: { $0 === tile }) else {
+            preconditionFailure("a tile of another Multiview session")
         }
+        return slot
     }
 
     /// The coordinator's half of a member link's status: the tile's copy, and the control host
     /// it records once the link's control path is up at the address it was opened at.
     func show(_ status: MultiviewLinkStatus, on tile: Tile) {
-        switch status {
-        case .opening: tile.status = "Connecting normal preview"
-        case .controlling:
-            tile.controlHost = tile.cameraAddress
-            tile.failureMessage = nil
-        case .awaitingPicture: tile.status = "Waiting for video"
-        case .live: if tile.status != "Live · Video mode" { tile.status = "Live · Video mode" }
-        case .reconnecting: tile.status = "Reconnecting…"
-        }
+        coordinator.show(status, slot: slot(tile))
     }
 
-    /// The shared network as the member links open on it.
-    private var stationNetwork: StationNetwork {
-        StationNetwork(ssid: ssid, password: password, hotspot: usePhoneHotspot)
-    }
-
-    private enum ProvisioningFailure: LocalizedError {
-        case message(String)
-        var errorDescription: String? {
-            switch self {
-            case .message(let text): return text
-            }
-        }
-    }
-
-    typealias Failure = MultiviewFailure
     func openLiveView(_ tile: Tile) {
-        closeCameraSettings()
-        guard let camera = tile.camera, tile.controlHost != nil, !tile.recovering else { return }
+        coordinator.openLiveView(slot: slot(tile))
+    }
+
+    func start() { coordinator.start() }
+
+    /// BLE discovery feeds the Add picker and network setup, and stays up while a camera
+    /// connects. A full stage, or an inactive app with nothing connecting, has no consumer for
+    /// an unfiltered duplicate scan.
+    static func needsDiscovery(
+        running: Bool, applicationActive: Bool, hasEmptySlot: Bool, connecting: Bool
+    ) -> Bool {
+        MultiviewCoordinator<Tile>.needsDiscovery(
+            running: running, applicationActive: applicationActive, hasEmptySlot: hasEmptySlot,
+            connecting: connecting)
+    }
+
+    func scan() { coordinator.scan() }
+
+    /// The wizard owns selection; the stage owns the scan and its persistent cleanup.
+    func scanNetworks(onFound: @escaping @MainActor (String) -> Void) async throws {
+        try await coordinator.scanNetworks(onFound: onFound)
+    }
+
+    @discardableResult func recordStationChange(_ camera: DjiAppleSighting) -> Bool {
+        coordinator.recordStationChange(camera)
+    }
+
+    func selectNetworkSource(hotspot: Bool) { coordinator.selectNetworkSource(hotspot: hotspot) }
+
+    func selectNetwork(_ name: String) { coordinator.selectNetwork(name) }
+
+    func joinSharedNetwork() async throws { try await coordinator.joinSharedNetwork() }
+
+    func configureNetwork() async -> Bool { await coordinator.configureNetwork() }
+
+    func setApplicationActive(_ active: Bool) { coordinator.setApplicationActive(active) }
+
+    func reconnect(_ tile: Tile) async { await coordinator.reconnect(slot: slot(tile)) }
+
+    func tryExperimentalNetwork(_ tile: Tile) async {
+        await coordinator.tryExperimentalNetwork(slot: slot(tile))
+    }
+
+    func add(_ camera: DjiAppleSighting, to tile: Tile, experimental: Bool = false) async {
+        await coordinator.add(camera, slot: slot(tile), experimental: experimental)
+    }
+
+    func connectPreview(_ tile: Tile) async { await coordinator.connectPreview(slot: slot(tile)) }
+
+    func remove(_ tile: Tile) async -> Bool { coordinator.remove(slot: slot(tile)) }
+
+    func stop() { coordinator.stop() }
+
+    @discardableResult func persistStage() -> Bool { coordinator.persistStage() }
+
+    /// A new Multiview session always asks for a network and starts with empty slots. Old
+    /// Keychain stages supply presentation preferences and cleanup obligations only; they must
+    /// not choose a network or reconnect cameras.
+    func restoreStage(_ savedStage: MultiviewStageJournal.Stage? = MultiviewStageStore.load()) {
+        coordinator.restoreStage(savedStage)
+    }
+
+    func enqueueAdd(_ camera: DjiAppleSighting, to tile: Tile, experimental: Bool = false) {
+        coordinator.enqueueAdd(camera, slot: slot(tile), experimental: experimental)
+    }
+
+    /// Close every camera's monitor first, then restore its own access point in parallel.
+    /// A force quit cannot run asynchronous cleanup; unfinished entries remain device-local.
+    func closeStage() async -> Bool { await coordinator.closeStage() }
+
+    /// Shared by scan completion/cancellation, close and restored cleanup. Its task survives
+    /// caller cancellation and prevents two BLE resets for the same camera.
+    @discardableResult func resetStationOnce(_ saved: MultiviewStageJournal.Camera) async -> Bool {
+        await coordinator.resetStationOnce(saved)
+    }
+
+    static func wifiAddress() -> String? { DjiAppleSharedWiFiPath.address() }
+}
+
+extension MultiviewSession: MultiviewHost {
+    func openLiveView(slot: Int) -> Bool {
+        let tile = tiles[slot]
+        guard let camera = tile.camera else { return false }
         let model = AppModel(session: CameraSession(borrowing: tile.decoder))
         model.session.updateMultiview(
             camera: camera, driver: tile.driver, status: tile.latestSettings)
@@ -437,7 +584,9 @@ final class MultiviewSession {
         model.assist.lutEnabled = tile.lutEnabled
         model.borrowMonitor(camera) { [weak self] in self?.closeLiveView() }
         tile.liveModel = model
+        return true
     }
+
     func closeLiveView() {
         for tile in tiles where tile.liveModel != nil {
             tile.lutEnabled = tile.liveModel?.assist.lutEnabled ?? tile.lutEnabled
@@ -453,216 +602,38 @@ final class MultiviewSession {
         }
     }
 
-    func start() {
-        guard !running else { return }
-        running = true
-        host = ""
-        ready = false
-        networkConfigured = false
-        ssid = ""
-        password = ""
-        usePhoneHotspot = false
-        restoreStage()
-        scan()
-        monitor = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
-                guard let self else { return }
-                self.ready = self.hostPath.address(hotspot: self.usePhoneHotspot) != nil
-                for tile in self.tiles {
-                    await tile.keepalive()
-                    tile.recoverAssistHandoff()
-                    let available =
-                        tile.controlHost != nil
-                        && tile.recordingObservation.map {
-                            Date().timeIntervalSince($0.received) < 3
-                        } == true
-                    if tile.recordingAvailable != available { tile.recordingAvailable = available }
-                    self.monitorPreview(tile)
-                    tile.samplePreviewHealth()
-                }
-            }
-        }
-    }
-    /// BLE discovery feeds the Add picker and network setup, and stays up while
-    /// a camera connects. A full stage, or an inactive app with nothing
-    /// connecting, has no consumer for an unfiltered duplicate scan.
-    static func needsDiscovery(
-        running: Bool, applicationActive: Bool, hasEmptySlot: Bool, connecting: Bool
-    ) -> Bool {
-        running && (hasEmptySlot || connecting) && (applicationActive || connecting)
+    func closeEditors() {
+        for tile in tiles { tile.retireControls() }
     }
 
-    private var discoveryNeeded: Bool {
-        Self.needsDiscovery(
-            running: running && !closing, applicationActive: applicationActive,
-            hasEmptySlot: tiles.contains { $0.camera == nil }, connecting: connectingCameras)
-    }
-
-    func scan() {
-        scanTask?.cancel()
-        guard discoveryNeeded else {
-            stopDiscovery()
-            return
-        }
-        discovering = true
-        scanTask = Task { [weak self] in
-            guard let self else { return }
-            guard await ble.waitUntilPoweredOn(), !Task.isCancelled else { return }
-            found.removeAll()
-            for await camera in ble.scan() {
-                guard !Task.isCancelled else { return }
-                if !found.contains(where: { $0.id == camera.id }) { found.append(camera) }
-            }
-        }
-    }
-    private func stopDiscovery() {
-        scanTask?.cancel()
-        ble.stopScan()
-        discovering = false
-    }
-
-    /// Follow demand without restarting a running scan (that clears `found`) or
-    /// starting one while the network-setup camera owns this BLE link.
-    private func refreshDiscovery() {
-        if !discoveryNeeded {
-            if discovering { stopDiscovery() }
-        } else if !discovering, !busy {
-            scan()
+    func memberChanged(slot: Int, _ change: MultiviewMemberChange) {
+        let tile = tiles[slot]
+        switch change {
+        case .camera:
+            tile.retireControls()
+            tile.control.linkDidChange()
+        case .control:
+            tile.retireControls()
+        case .removed:
+            tile.recovery = MultiviewRecovery()
+            tile.settings = CameraStatus()
+            tile.latestSettings = CameraStatus()
+            tile.pose = GimbalStickMapping()
+            tile.updateLUT()
+            tile.previewStarted = nil
+            tile.recordingObservation = nil
+            tile.responses.removeAll()
+            tile.hasPicture = false
+            tile.decoder.onHandoffNeedsIDR = nil
+            tile.pendingAssistHandoff = false
+            tile.enableSends = 0
+            tile.lastEnable = .distantPast
+            tile.decoder.reset()
         }
     }
 
-    /// The wizard owns selection; this session owns the scan and its persistent cleanup.
-    /// Reuse Add setup's same-link station scan instead of a second BLE implementation.
-    func scanNetworks(onFound: @escaping @MainActor (String) -> Void) async throws {
-        guard running, !closing, !busy, !tiles.contains(where: { $0.camera != nil }) else {
-            throw CancellationError()
-        }
-        busy = true
-        defer {
-            busy = false
-            networkScanTask = nil
-            refreshDiscovery()
-        }
-        let task = Task {
-            var camera: DjiAppleSighting?
-            for _ in 0..<10 {
-                try Task.checkCancellation()
-                camera = found.first(where: { cameraPolicy.hasPreview($0) })
-                if camera != nil { break }
-                try await Task.sleep(for: .milliseconds(300))
-            }
-            guard let camera else { throw Failure.unavailable }
-            stopDiscovery()
-            try await commissioner.scanNetworks(
-                through: camera,
-                beforeStationChange: {
-                    guard self.recordStationChange(camera) else {
-                        throw ProvisioningFailure.message(
-                            "Could not save camera Wi-Fi cleanup. Try again.")
-                    }
-                },
-                onRestored: { restored in
-                    if restored {
-                        self.pendingReset.removeAll { $0.id == camera.id }
-                        if self.pendingReset.isEmpty { self.networkSetupError = nil }
-                        self.persistStage()
-                    } else {
-                        self.networkSetupError =
-                            "Camera Wi-Fi could not be restored. Keep it powered on and close Multiview to retry."
-                    }
-                }, onFound: onFound)
-        }
-        networkScanTask = task
-        try await withTaskCancellationHandler {
-            try await task.value
-        } onCancel: {
-            task.cancel()
-        }
-    }
-
-    @discardableResult func recordStationChange(_ camera: DjiAppleSighting) -> Bool {
-        let record = commissioner.record(camera)
-        let saved = MultiviewStageStore.Camera(
-            slot: 0, id: record.id, name: record.name, modelId: record.modelId,
-            identity: nil, address: "", experimental: false, lutEnabled: false)
-        pendingReset = MultiviewStageStore.cleanupTargets(pendingReset, including: [saved])
-        return persistStage()
-    }
-
-    func selectNetworkSource(hotspot: Bool) {
-        guard !configuringNetwork, !tiles.contains(where: { $0.camera != nil }) else { return }
-        usePhoneHotspot = hotspot
-        ssid = ""
-        password = ""
-        invalidateNetworkConfirmation()
-    }
-
-    func selectNetwork(_ name: String) {
-        guard !configuringNetwork, !tiles.contains(where: { $0.camera != nil }) else { return }
-        if ssid != name {
-            ssid = name
-            password = loadNetwork(name, usePhoneHotspot)?.password ?? ""
-        }
-        invalidateNetworkConfirmation()
-    }
-
-    private func invalidateNetworkConfirmation() {
-        networkConfigured = false
-        networkSetupError = nil
-        host = ""
-        ready = false
-    }
-
-    func joinSharedNetwork() async throws {
-        if let hostJoin { return try await hostJoin.value }
-        let task = Task { try await self.performHostJoin() }
-        hostJoin = task
-        defer { hostJoin = nil }
-        try await task.value
-        try Task.checkCancellation()
-        guard running else { throw CancellationError() }
-    }
-    private func performHostJoin() async throws {
-        guard !ssid.isEmpty else { throw Failure.network }
-        // The host phone must not try joining its own hotspot. Its local bridge
-        // may appear only after the first camera associates.
-        if usePhoneHotspot { return }
-        guard
-            let address = try await hostPath.join(
-                StationNetwork(ssid: ssid, password: password, hotspot: false))
-        else { throw Failure.network }
-        host = address
-        ready = true
-    }
-
-    func configureNetwork() async -> Bool {
-        guard !busy, !configuringNetwork, !tiles.contains(where: { $0.camera != nil }) else {
-            return false
-        }
-        configuringNetwork = true
-        networkSetupError = nil
-        defer { configuringNetwork = false }
-        do {
-            _ = try MulticamCommands.join(ssid: ssid, password: password, seq: 0)
-            try await joinSharedNetwork()
-            MultiviewNetworkStore.save(ssid: ssid, password: password, hotspot: usePhoneHotspot)
-            networkConfigured = true
-            persistStage()
-            return true
-        } catch {
-            networkSetupError = error.localizedDescription
-            return false
-        }
-    }
-
-    func setApplicationActive(_ active: Bool) {
-        guard applicationActive != active else { return }
-        applicationActive = active
-        activityGeneration &+= 1
-        ControlLiveLog.line("multiview: scene \(active ? "active" : "inactive")")
+    func applicationActivityChanged(_ active: Bool) {
         if active {
-            foregroundAt = Date()
             for tile in tiles where tile.publishing { tile.checkForegroundDecoder = true }
             if backgroundTask != .invalid {
                 UIApplication.shared.endBackgroundTask(backgroundTask)
@@ -678,466 +649,95 @@ final class MultiviewSession {
                 // Keep camera assignments and sockets. Foreground watchdog owns repair.
             }
         }
-        refreshDiscovery()
     }
 
-    func reconnect(_ tile: Tile) async {
-        guard !busy, !tile.connecting, !tile.recovering, let camera = tile.camera else { return }
-        tile.failureMessage = nil
-        tile.recovery = MultiviewRecovery()
-        if tile.identity != nil {
-            await connectPreview(tile)
-            if running, !Task.isCancelled, tile.failureMessage != nil { await readd(tile) }
-        } else {
-            tile.camera = nil
-            await add(camera, to: tile, experimental: tile.experimentalNetwork)
+    func stageStopped() {
+        for tile in tiles { tile.decoder.reset() }
+    }
+
+    /// A tile repairs only while it has its own datalink (a closed link has nothing to repair).
+    func showsPicture(slot: Int) -> Bool { tiles[slot].driver != nil }
+
+    func log(_ line: String) { ControlLiveLog.line(line) }
+}
+
+/// Pocket's nearby DJI discovery as the stage's scanner.
+@MainActor final class MultiviewNearbyScanner: NearbyCameraScanner {
+    typealias Camera = DjiAppleSighting
+    private let ble: DjiAppleBluetoothLink
+
+    init(ble: DjiAppleBluetoothLink) { self.ble = ble }
+
+    func waitUntilReady() async -> Bool { await ble.waitUntilPoweredOn() }
+
+    func scan(_ found: @escaping @MainActor (DjiAppleSighting) -> Void) async {
+        for await camera in ble.scan() {
+            guard !Task.isCancelled else { return }
+            found(camera)
         }
     }
 
-    private func readd(_ tile: Tile) async {
-        guard let camera = tile.camera else { return }
-        let experimental = tile.experimentalNetwork
-        let lutEnabled = tile.lutEnabled
-        guard await remove(tile) else { return }
-        tile.lutEnabled = lutEnabled
-        await add(camera, to: tile, experimental: experimental)
+    func stop() { ble.stopScan() }
+}
+
+/// DJI's station commissioner with Pocket's test hook: a test replaces only the radio step of a
+/// camera's return; the bounded retry around it is the same either way.
+@MainActor final class MultiviewStationCommissioner: StationCommissioner {
+    typealias Camera = DjiAppleSighting
+    private let base: DJIStationCommissioner
+    private let resetCamera: ((MultiviewStageJournal.Camera) async throws -> Bool)?
+    private let resetRetryDelay: () async -> Void
+
+    init(
+        base: DJIStationCommissioner,
+        resetCamera: ((MultiviewStageJournal.Camera) async throws -> Bool)?,
+        resetRetryDelay: @escaping () async -> Void
+    ) {
+        self.base = base
+        self.resetCamera = resetCamera
+        self.resetRetryDelay = resetRetryDelay
     }
 
-    func tryExperimentalNetwork(_ tile: Tile) async {
-        guard let camera = tile.camera, await remove(tile) else { return }
-        await add(camera, to: tile, experimental: true)
+    var scansNetworks: Bool { base.scansNetworks }
+
+    func record(_ camera: DjiAppleSighting) -> StationCameraRecord { base.record(camera) }
+
+    func connect(
+        _ camera: DjiAppleSighting, progress: @escaping @MainActor (String) -> Void
+    ) async throws -> any StationCommission {
+        try await base.connect(camera, progress: progress)
     }
 
-    /// The coordinator's half of repair: when a tile may repair, the 45 s path-loss rule, and the
-    /// rejoin within the tile's budget. The tile's own link decides and runs the repair.
-    private func monitorPreview(_ tile: Tile) {
-        guard applicationActive, Date().timeIntervalSince(foregroundAt) > 3,
-            !busy, !tile.recovering, !tile.recovery.failed,
-            tile.publishing, tile.driver != nil
-        else { return }
-        let now = Date()
-        let pathReady = hostPath.address(hotspot: usePhoneHotspot) != nil
-        if pathReady {
-            tile.pathLostAt = nil
-        } else if tile.pathLostAt == nil {
-            tile.pathLostAt = now
-        }
-        let generation = activityGeneration
-        let context = MultiviewRepairContext(
-            pathReady: pathReady,
-            running: { [weak self] in self?.running ?? false },
-            applicationActive: { [weak self] in self?.applicationActive ?? false },
-            foregroundUnchanged: { [weak self] in self?.activityGeneration == generation },
-            pathAvailable: { [weak self] in
-                guard let self else { return false }
-                return hostPath.address(hotspot: usePhoneHotspot) != nil
-            },
-            beginAttempt: { [weak tile] in tile?.recovery.beginRejoin() ?? false },
-            bluetoothTurn: { [weak self] in await self?.bluetoothTurn() })
-        switch tile.repair(context) {
-        case .healthy:
-            if !pathReady, now.timeIntervalSince(tile.pathLostAt ?? now) > 45 {
-                tile.recovery.fail()
-                tile.failureMessage =
-                    "Shared network unavailable. Rejoin it, then reconnect this camera."
-            }
-        case .handled:
-            break
-        case .waitForOperator(let message):
-            waitForOperator(tile, message)
-        case .repair(let work):
-            tile.recovering = true
-            let deadline = tile.repairDeadline
-            tile.repairTask = Task { [weak self, weak tile] in
-                guard let self, let tile else { return }
-                defer {
-                    tile.recovering = false
-                    tile.repairTask = nil
-                }
-                switch await MultiviewRepairResult.race(deadline: deadline, work) {
-                case .done: break
-                case .rejoin: await rejoinWhenAvailable(tile)
-                case .waitForOperator(let message): waitForOperator(tile, message)
-                }
-            }
-        }
-    }
+    func closeCommissions() { base.closeCommissions() }
 
-    /// No automatic repair remains for this tile: it shows why and offers Reconnect.
-    private func waitForOperator(_ tile: Tile, _ message: String) {
-        tile.recovery.fail()
-        tile.failureMessage = message
-    }
-
-    /// A member link's turn on Bluetooth for its repair: after any add or network scan (the
-    /// session's Bluetooth users) has finished. DJI's link never asks; the shared coordinator owns
-    /// the real queue (Plan 3).
-    private func bluetoothTurn() async -> (@MainActor () -> Void)? {
-        while running, !Task.isCancelled, busy || connectingCameras {
-            try? await Task.sleep(for: .milliseconds(200))
-        }
-        guard running, !Task.isCancelled else { return nil }
-        return {}
-    }
-
-    private func rejoinWhenAvailable(_ tile: Tile) async {
-        // One discovery owner; waiting tiles do not spend their retry budget.
-        while busy && running && !Task.isCancelled {
-            try? await Task.sleep(for: .milliseconds(200))
-        }
-        guard running, !Task.isCancelled, tile.camera != nil else { return }
-        guard tile.recovery.beginRejoin() else {
-            tile.failureMessage = "Could not restore preview. Tap Reconnect to try again."
-            return
-        }
-        await connectPreview(tile)
-    }
-
-    func add(_ camera: DjiAppleSighting, to tile: Tile, experimental: Bool = false) async {
-        let reasons = ResourceAdmission.reasons(
-            admitting: ResourceRequest(entry: MonitorEntryID(tile.id), device: nil, claims: []),
-            qualification: cameraPolicy.qualification(camera, experimental: experimental),
-            alongside: recordingTiles.map {
-                ResourceRequest(entry: MonitorEntryID($0.id), device: nil, claims: [])
-            }, budget: MultiviewQualificationPolicy.budget)
-        guard reasons.isEmpty else {
-            error = "Multiview preview is not available for this camera model yet."
-            return
-        }
-        guard running, networkConfigured, !closing, !busy, !tile.connecting, tile.camera == nil,
-            !tiles.contains(where: { $0.camera?.id == camera.id })
-        else { return }
-        tile.connecting = true
-        var client: (any StationCommission)?
-        tile.camera = camera
-        tile.experimentalNetwork = experimental
-        tile.networkVerified = false
-        tile.status = "Connecting · approve on camera"
-        refreshDiscovery()
-        defer {
-            tile.connecting = false
-            client?.close()
-            if running { persistStage() }
-            refreshDiscovery()
-        }
-        persistStage()
-        var stage = "host Wi-Fi"
-        do {
-            try await joinSharedNetwork()
-            stage = "Bluetooth pairing"
-            let link = try await commissioner.connect(camera) { tile.status = $0 }
-            client = link
-            stage = "camera Wi-Fi identity"
-            let identity = try await link.identity()
-            stage = "station join"
-            let outcome = try await link.join(
-                stationNetwork, identity: identity, experimental: experimental, progress: { tile.status = $0 },
-                verifyOnNetwork: {
-                    try await self.discoverPreview(tile, camera: camera, identity: identity)
-                    return true
-                })
-            tile.identity = identity
-            MultiviewNetworkStore.save(ssid: ssid, password: password, hotspot: usePhoneHotspot)
-            if outcome == .verified { return }
-            link.close()
-            stage = "LAN discovery"
-            try await discoverPreview(tile, camera: camera, identity: identity)
-        } catch {
-            guard running, !Task.isCancelled else { return }
-            tile.close()
-            tile.status = "Could not connect"
-            tile.failureMessage = djiConnectionFailureDescription(
-                error, fallback: error.localizedDescription)
+    func restoreAccessPoint(_ record: StationCameraRecord) async -> StationRestoreResult {
+        guard let resetCamera else { return await base.restoreAccessPoint(record) }
+        let saved = MultiviewStageJournal.Camera(
+            slot: 0, id: record.id, name: record.name, modelId: record.modelId, identity: nil,
+            deviceAddress: record.deviceAddress, address: "", experimental: false,
+            lutEnabled: false)
+        var retries = 0
+        let restored = await restoreCameraWiFiWithRetry(waitBetween: { [resetRetryDelay] in
+            retries += 1
             ControlLiveLog.line(
-                "multiview: add failed stage=\(stage) error=\((error as NSError).domain)/\((error as NSError).code)"
-            )
-            // Keep the tile available for discovery retry after a successful join.
+                "multiview: camera pairing deferred; Wi-Fi return retry \(retries) of 2")
+            await resetRetryDelay()
+        }) {
+            try await resetCamera(saved)
         }
-    }
-    func connectPreview(_ tile: Tile) async {
-        guard running, !closing, !busy, !tile.connecting, let camera = tile.camera,
-            let identity = tile.identity
-        else { return }
-        tile.connecting = true
-        defer {
-            tile.connecting = false
-            if running { persistStage() }
-        }
-        do { try await discoverPreview(tile, camera: camera, identity: identity) } catch {
-            guard running, !Task.isCancelled else { return }
-            tile.close()
-            tile.publishing = false
-            tile.controlHost = nil
-            tile.status = "Could not connect preview"
-            tile.failureMessage = "Could not restore preview. Tap Reconnect to try again."
-            tile.recovery.fail()
-        }
+        return restored ? .restored : .failed
     }
 
-    private func discoverPreview(_ tile: Tile, camera: DjiAppleSighting, identity: [UInt8]) async throws
-    {
-        let search = DjiAppleNetworkDiscovery()
-        searches[tile.id] = search
-        defer {
-            search.cancel()
-            searches.removeValue(forKey: tile.id)
-        }
-        tile.close()
-        tile.controlHost = nil
-        tile.recordingAvailable = false
-        let excluded = Set(tiles.filter { $0.id != tile.id }.compactMap(\.controlHost))
-        if SharedWiFiPath.validAddress(tile.cameraAddress) {
-            do {
-                try await openPreview(tile, camera: camera, identity: identity)
-                return
-            } catch { if error is CancellationError { throw error } }
-        }
-        for attempt in 1...2 {
-            guard running else { throw CancellationError() }
-            tile.status = "Finding camera on Wi-Fi · \(attempt) of 2"
-            let candidates = try await search.candidates(
-                excluding: excluded, hotspot: usePhoneHotspot)
-            for address in candidates {
-                guard running else { throw CancellationError() }
-                tile.cameraAddress = address
-                do {
-                    try await openPreview(tile, camera: camera, identity: identity)
-                    return
-                } catch {
-                    tile.close()
-                    tile.controlHost = nil
-                    if error is CancellationError { throw error }
-                }
-            }
-            if attempt == 1 { try await Task.sleep(for: .seconds(3)) }
-        }
-        throw ProvisioningFailure.message(
-            "Could not find this camera on the shared Wi-Fi. Check that both devices use the same network and that client isolation is off, then tap Reconnect."
-        )
+    func scanNetworks(
+        through camera: DjiAppleSighting,
+        beforeStationChange: @escaping @MainActor () throws -> Void,
+        onRestored: @escaping @MainActor (Bool) -> Void,
+        onFound: @escaping @MainActor (String) -> Void
+    ) async throws {
+        try await base.scanNetworks(
+            through: camera, beforeStationChange: beforeStationChange, onRestored: onRestored,
+            onFound: onFound)
     }
-
-    private func openPreview(_ tile: Tile, camera: DjiAppleSighting, identity: [UInt8]) async throws {
-        let address = tile.cameraAddress
-        guard addressReservations[address] == nil || addressReservations[address] == tile.id else {
-            throw Failure.unavailable
-        }
-        addressReservations[address] = tile.id
-        defer {
-            if addressReservations[address] == tile.id {
-                addressReservations.removeValue(forKey: address)
-            }
-        }
-        guard running, SharedWiFiPath.validAddress(tile.cameraAddress),
-            !tiles.contains(where: { $0.id != tile.id && $0.controlHost == tile.cameraAddress })
-        else {
-            throw ProvisioningFailure.message(
-                "Camera discovery returned an unavailable address. Tap Reconnect to search again.")
-        }
-        let proven = try await tile.open(
-            camera, at: address, expecting: identity, on: stationNetwork)
-        guard !tiles.contains(where: { $0.id != tile.id && $0.identity == proven }) else {
-            tile.close()
-            throw ProvisioningFailure.message("This camera is already in Multiview.")
-        }
-        guard running else { throw CancellationError() }
-        tile.networkVerified = true
-        if !cameraPolicy.hasPreview(camera) {
-            tile.close()
-            tile.failureMessage = nil
-            tile.status = "Wi-Fi join verified · Preview not supported yet"
-            ControlLiveLog.line(
-                "multiview: experimental LAN identity verified; preview unavailable")
-            return
-        }
-        try await tile.startPreview(camera)
-    }
-
-    func remove(_ tile: Tile) async -> Bool {
-        guard !busy, !tile.connecting, !groupRecordingBusy, !tile.recordingBusy else {
-            return false
-        }
-        tile.repairTask?.cancel()
-        tile.repairTask = nil
-        tile.recovering = false
-        tile.recovery = MultiviewRecovery()
-        tile.pathLostAt = nil
-        tile.failureMessage = nil
-        tile.close()
-        tile.camera = nil
-        tile.networkVerified = false
-        tile.experimentalNetwork = false
-        tile.settings = CameraStatus()
-        tile.latestSettings = CameraStatus()
-        tile.pose = GimbalStickMapping()
-        tile.lutEnabled = true
-        tile.updateLUT()
-        tile.previewStarted = nil
-        tile.identity = nil
-        tile.controlHost = nil
-        tile.recordingObservation = nil
-        tile.recordingAvailable = false
-        tile.responses.removeAll()
-        tile.recordingNote = nil
-        tile.hasPicture = false
-        tile.publishing = false
-        tile.decoder.onHandoffNeedsIDR = nil
-        tile.pendingAssistHandoff = false
-        tile.enableSends = 0
-        tile.lastEnable = .distantPast
-        tile.decoder.reset()
-        tile.status = "Add camera"
-        persistStage()
-        refreshDiscovery()
-        return true
-    }
-    func stop() {
-        closeCameraSettings()
-        persistStage()
-        hostJoin?.cancel()
-        hostJoin = nil
-        for task in connectionTasks.values { task.cancel() }
-        connectionTasks.removeAll()
-        commissioner.closeCommissions()
-        closeLiveView()
-        running = false
-        setApplicationActive(true)
-        for search in searches.values { search.cancel() }
-        searches.removeAll()
-        monitor?.cancel()
-        stopDiscovery()
-        networkScanTask?.cancel()
-        ready = false
-        password = ""
-        for tile in tiles {
-            tile.repairTask?.cancel()
-            tile.close()
-            tile.decoder.reset()
-        }
-    }
-    private func savedCameras() -> [MultiviewStageStore.Camera] {
-        tiles.enumerated().compactMap { index, tile in
-            guard let camera = tile.camera else { return nil }
-            return .init(
-                slot: index, id: camera.id, name: camera.name, modelId: camera.modelId,
-                identity: tile.identity, address: tile.cameraAddress,
-                experimental: tile.experimentalNetwork, lutEnabled: tile.lutEnabled)
-        }
-    }
-    @discardableResult func persistStage() -> Bool {
-        if !networkConfigured, pendingReset.isEmpty {
-            guard cleanupJournalWritten else { return true }
-            let success = saveStage(nil)
-            if success { cleanupJournalWritten = false }
-            return success
-        }
-        let saved = savedCameras()
-        let success = saveStage(
-            .init(
-                ssid: networkConfigured ? ssid : "", hotspot: usePhoneHotspot,
-                layout: layout.rawValue, focusedIndex: focusedIndex, cameras: saved,
-                pendingReset: running && !closing
-                    ? MultiviewStageStore.cleanupTargets(pendingReset, including: saved)
-                    : pendingReset,
-                returnedToCameraWiFi: !running && pendingReset.isEmpty,
-                fill: feedAspect == .fill))
-        if !success { ControlLiveLog.line("multiview: could not save stage") }
-        if success, !networkConfigured { cleanupJournalWritten = true }
-        return success
-    }
-    /// A new Multiview session always asks for a network and starts with empty
-    /// slots. Old Keychain stages supply presentation preferences and cleanup
-    /// obligations only; they must not choose a network or reconnect cameras.
-    func restoreStage(_ savedStage: MultiviewStageStore.Stage? = MultiviewStageStore.load()) {
-        guard let stage = savedStage else { return }
-        pendingReset = stage.pendingReset ?? []
-        if stage.returnedToCameraWiFi != true {
-            pendingReset = MultiviewStageStore.cleanupTargets(
-                pendingReset, including: stage.cameras)
-        }
-        cleanupJournalWritten = !pendingReset.isEmpty
-        presentation.importLegacy(
-            .init(
-                layout: MultiviewLayout(rawValue: stage.layout) == .grid ? .grid : .centerStage,
-                selected: stage.focusedIndex, fill: stage.fill == true))
-        // Migrate unfinished camera cleanup before a new camera is added.
-        // With no cleanup, retain the last preferences even if setup is cancelled.
-        if cleanupJournalWritten { persistStage() }
-    }
-    func enqueueAdd(_ camera: DjiAppleSighting, to tile: Tile, experimental: Bool = false) {
-        guard running, networkConfigured, !closing, tile.camera == nil, !tile.connecting else {
-            return
-        }
-        connectionTasks[tile.id]?.cancel()
-        connectionTasks[tile.id] = Task {
-            await self.add(camera, to: tile, experimental: experimental)
-        }
-    }
-    /// Close every camera's monitor first, then restore its own access point in parallel.
-    /// A force quit cannot run asynchronous cleanup; unfinished entries remain device-local.
-    var hasPendingCleanup: Bool { !running && !pendingReset.isEmpty && !closing }
-
-    func closeStage() async -> Bool {
-        closeCameraSettings()
-        guard !closing else { return false }
-        closing = true
-        networkScanTask?.cancel()
-        _ = try? await networkScanTask?.value
-        if running {
-            pendingReset = MultiviewStageStore.cleanupTargets(
-                pendingReset, including: savedCameras())
-        }
-        persistStage()
-        stop()
-        await resetStations(pendingReset)
-        persistStage()
-        closing = false
-        if !pendingReset.isEmpty {
-            error =
-                "Some cameras could not return to their own Wi-Fi. Keep them powered on and close Multiview again to retry."
-            return false
-        }
-        return true
-    }
-    private func resetStations(_ cameras: [MultiviewStageStore.Camera]) async {
-        await withTaskGroup(of: Void.self) { group in
-            for saved in cameras {
-                group.addTask { _ = await self.resetStationOnce(saved) }
-            }
-        }
-    }
-    /// Shared by scan completion/cancellation, close and restored cleanup. Its task
-    /// survives caller cancellation and prevents two BLE resets for the same camera.
-    @discardableResult func resetStationOnce(_ saved: MultiviewStageStore.Camera) async -> Bool {
-        if let task = stationResetTasks[saved.id] { return await task.value }
-        guard pendingReset.contains(where: { $0.id == saved.id }) else { return true }
-        let task = Task {
-            let success = await returnCameraWiFi(saved)
-            if success { pendingReset.removeAll { $0.id == saved.id } }
-            persistStage()
-            stationResetTasks.removeValue(forKey: saved.id)
-            return success
-        }
-        stationResetTasks[saved.id] = task
-        return await task.value
-    }
-    /// The test hook replaces only the radio step; the bounded retry is the same either way.
-    private func returnCameraWiFi(_ saved: MultiviewStageStore.Camera) async -> Bool {
-        if let resetCamera {
-            var retries = 0
-            return await restoreCameraWiFiWithRetry(waitBetween: {
-                retries += 1
-                ControlLiveLog.line(
-                    "multiview: camera pairing deferred; Wi-Fi return retry \(retries) of 2")
-                await resetRetryDelay()
-            }) {
-                try await resetCamera(saved)
-            }
-        }
-        return await commissioner.restoreAccessPoint(
-            StationCameraRecord(id: saved.id, name: saved.name, modelId: saved.modelId))
-    }
-
-    static func wifiAddress() -> String? { DjiAppleSharedWiFiPath.address() }
 }
 
 /// Discovery is broader than the preview command profiles captured so far.

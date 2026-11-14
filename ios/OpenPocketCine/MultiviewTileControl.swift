@@ -1,5 +1,6 @@
 import Foundation
 import OpenCineCore
+import OpenCineAppKit
 import OpenCineMulticam
 import OpenPocketViewCore
 import OpenCineDJIApple
@@ -83,37 +84,28 @@ import OpenCineDJIApple
         }
         let sent = Date()
         let clock = clock
-        let deadline = clock.now() + confirmationWindow
+        let window = confirmationWindow
         tile.recordingBusy = true
         tile.recordingNote = RecordAll.waiting
         onStage?(.sent)
         Task { @MainActor [weak tile] in
-            var event = ControlWireEvent.unconfirmed
-            var acknowledged = false
-            defer {
-                tile?.recordingBusy = false
-                onStage?(event)
-            }
-            while clock.now() < deadline {
-                try? await clock.sleep(.milliseconds(100))
-                guard let tile, tile.driver === driver else { return }
-                if let reply = tile.responses[seq], reply.cmdSet == 2, reply.cmdId == 2 {
-                    if reply.payload != [0] {
-                        event = .refused
-                        return
-                    }
-                    if !acknowledged {
-                        acknowledged = true
-                        onStage?(.acknowledged)
-                    }
-                }
-                if let observation = tile.recordingObservation, observation.received > sent,
-                    observation.active == start
-                {
-                    ControlLiveLog.line("multiview: station recording confirmed active=\(start)")
-                    event = .confirmed
-                    return
-                }
+            let outcome = await MultiviewRecordConfirmation.wait(
+                start: start, sentAt: sent, window: window, clock: clock,
+                current: { tile?.driver === driver },
+                reply: {
+                    guard let reply = tile?.responses[seq], reply.cmdSet == 2, reply.cmdId == 2
+                    else { return nil }
+                    return reply.payload == [0]
+                },
+                report: { tile?.recordReport },
+                acknowledged: { onStage?(.acknowledged) })
+            tile?.recordingBusy = false
+            switch outcome {
+            case .confirmed:
+                ControlLiveLog.line("multiview: station recording confirmed active=\(start)")
+                onStage?(.confirmed)
+            case .refused: onStage?(.refused)
+            case .unconfirmed: onStage?(.unconfirmed)
             }
         }
     }
@@ -139,79 +131,33 @@ extension MultiviewSession.Tile {
 
 extension MultiviewSession {
     /// Tiles with a camera, in slot order.
-    var multicamGroup: MulticamGroup { multicamGroup(of: recordingTiles) }
+    var multicamGroup: MulticamGroup { coordinator.multicamGroup() }
 
-    func multicamSnapshot() -> MulticamSnapshot { multicamSnapshot(of: recordingTiles) }
+    func multicamSnapshot() -> MulticamSnapshot { coordinator.multicamSnapshot() }
 
-    /// The engine's view of only `tiles` (those with a camera). A one-tile plan or lease check
-    /// reads only that tile, so a SwiftUI view showing it re-renders only for that camera; plans
-    /// built this way equal plans built over every tile (non-requested entries never matter).
+    /// The engine's view of only `tiles` (those with a camera), in slot order.
     func multicamGroup(of tiles: [Tile]) -> MulticamGroup {
-        var group = MulticamGroup()
-        for tile in tiles where tile.camera != nil { try? group.add(tile.entry) }
-        return group
+        coordinator.multicamGroup(of: slots(tiles))
     }
 
     func multicamSnapshot(of tiles: [Tile]) -> MulticamSnapshot {
-        let members = tiles.filter { $0.camera != nil }
-        return MulticamSnapshot(
-            cameras: members.map { $0.control.current },
-            pictures: Dictionary(
-                uniqueKeysWithValues: members.map { ($0.stream, $0.pictureHealth) }),
-            busy: Set(
-                members.filter { $0.recordingBusy || $0.connecting || $0.recovering }
-                    .map(\.entryID)),
-            now: .now())
+        coordinator.multicamSnapshot(of: slots(tiles))
     }
 
-    var cameraSessions: [CameraSessionID: any OpenCineCore.CameraSession] {
-        Dictionary(
-            uniqueKeysWithValues: tiles.map {
-                ($0.control.id, $0.control as any OpenCineCore.CameraSession)
-            })
+    private func slots(_ chosen: [Tile]) -> [Int] {
+        tiles.indices.filter { slot in chosen.contains { $0 === tiles[slot] } }
     }
 
     /// The operator's record button resolved to an explicit plan: stop when any requested camera
     /// reports recording, else start. `tile == nil` is Record all.
     func recordPlan(for tile: Tile? = nil) -> RecordPlan {
-        let requested = tile.map { [$0] } ?? recordingTiles
-        return RecordAll.plan(
-            requested.map(\.entryID), recording: { id in
-                requested.contains { $0.entryID == id && $0.recordingActive == true }
-            },
-            in: multicamGroup(of: requested), at: multicamSnapshot(of: requested))
+        coordinator.recordPlan(slot: tile.flatMap { tile in tiles.firstIndex { $0 === tile } })
     }
 
     /// Sends an approved plan: one explicit start or stop per camera, revalidated first, each
     /// outcome on its own tile. A partial result is never compensated; stopping a camera that
     /// started is a separate operator action.
     func record(_ plan: RecordPlan, together: Bool) async {
-        guard !busy, !closing, !groupRecordingBusy else { return }
-        if together {
-            groupRecordingBusy = true
-            groupRecordingNote = RecordAll.progress(plan.direction)
-        }
-        defer { if together { groupRecordingBusy = false } }
-        guard
-            let result = await RecordAll.run(
-                plan, in: multicamGroup, at: multicamSnapshot(), sessions: cameraSessions)
-        else {
-            // Stale: a camera, link or mode changed after the operator approved.
-            if together { groupRecordingNote = RecordAll.changed }
-            return
-        }
-        let group = multicamGroup
-        for tile in tiles {
-            guard let outcome = result.outcome(for: tile.entryID, in: group),
-                let note = RecordAll.note(outcome, direction: plan.direction)
-            else { continue }
-            tile.recordingNote = note
-        }
-        guard together else { return }
-        let start = plan.direction == .start
-        let allMatch = recordingTiles.allSatisfy {
-            $0.recordingAvailable && $0.recordingActive == start
-        }
-        groupRecordingNote = RecordAll.summary(result, allMatch: allMatch)
+        await coordinator.record(plan, together: together)
     }
 }

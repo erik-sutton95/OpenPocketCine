@@ -6,15 +6,21 @@ import OpenPocketViewCore
 
 /// The DJI member link Pocket supplies (spec's settled call): each tile's own datalink, identity
 /// check, live view start, watchdog repair and Auto LUT, behind OpenCine's `MultiviewMemberLink`.
-/// The session keeps what the shared coordinator will own: guards, address reservations,
-/// discovery, the rejoin budget, the path-loss rule and the tile's copy and control host, which
-/// it derives from the link's `onStatus`.
+/// OpenCine's `MultiviewCoordinator` owns the rest: guards, address reservations, discovery, the
+/// rejoin budget, the path-loss rule and the tile's copy and control host, which it derives from
+/// the link's `onStatus`.
 extension MultiviewSession.Tile: MultiviewMemberLink {
     typealias Camera = DjiAppleSighting
 
     var session: any OpenCineCore.CameraSession { control }
 
-    var isPublishing: Bool { publishing }
+    var snapshot: CameraSnapshot { control.current }
+
+    /// The camera's own latest take report on this link (0x02/0x80), as the stage's record
+    /// freshness and confirmation read it.
+    var recordReport: MultiviewRecordReport? {
+        recordingObservation.map { MultiviewRecordReport(recording: $0.active, receivedAt: $0.received) }
+    }
 
     /// Longer than any DJI repair's own bound (the decoder repair's two 16 s windows, the UDP
     /// renegotiation's 15 s station deadline), so the race never cuts a DJI repair short.
@@ -32,6 +38,8 @@ extension MultiviewSession.Tile: MultiviewMemberLink {
         driver?.close()
         driver = nil
         controlLinkUp = false
+        // A new link starts DJI's watchdog ladder over; the member's budget stays the coordinator's.
+        recovery = MultiviewRecovery()
         responses.removeAll()
         recordingObservation = nil
         publishing = false
@@ -106,7 +114,13 @@ extension MultiviewSession.Tile: MultiviewMemberLink {
         if !hasPicture { onStatus?(.awaitingPicture) }
     }
 
-    func keepalive() async { driver?.keepalive() }
+    /// The stage's 1 Hz tick on this tile: the link's keepalive, a pending assist hand-off and the
+    /// picture's health sample.
+    func keepalive() async {
+        driver?.keepalive()
+        recoverAssistHandoff()
+        samplePreviewHealth()
+    }
 
     func close() {
         driver?.close()
@@ -134,6 +148,8 @@ extension MultiviewSession.Tile: MultiviewMemberLink {
         guard let snapshot = watchdogSnapshot(now: now, pathReady: context.pathReady) else {
             return .handled
         }
+        // A sustained live transport restores the member's rejoin budget.
+        context.observeHealth(FeedWatchdog.udpReceiveAlive(snapshot))
         if checkForegroundDecoder && FeedWatchdog.udpReceiveAlive(snapshot) {
             checkForegroundDecoder = false
             if decoder.displayLayer.status == .failed

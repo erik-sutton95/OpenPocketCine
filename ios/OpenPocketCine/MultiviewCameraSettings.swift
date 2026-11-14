@@ -1,4 +1,5 @@
 import MonitorUI
+import OpenCineAppKit
 import OpenCineCameraControls
 import OpenCineMulticam
 import OpenPocketViewCore
@@ -6,17 +7,22 @@ import SwiftUI
 import OpenCineMedia
 
 extension MultiviewSession {
+    /// The stage's rule, plus what only Pocket knows: the tile's own datalink and a borrowed
+    /// Live View.
     func controlsAvailable(for tile: Tile) -> Bool {
-        tile.camera != nil && tile.driver != nil && tile.controlHost != nil
-            && !tile.connecting && !tile.recovering && tile.liveModel == nil
-            && !busy && !closing && applicationActive && tile.recordingAvailable
-            && !groupRecordingBusy && !tile.recordingBusy
+        guard let slot = tiles.firstIndex(where: { $0 === tile }) else { return false }
+        return coordinator.controlsAvailable(slot: slot) && tile.driver != nil
+            && tile.liveModel == nil
     }
 
     /// One editor at a time; changing tabs retires queued SETs before binding the next camera.
     @discardableResult
     func openCameraSettings(_ tile: Tile) -> AppModel? {
-        closeCameraSettings()
+        guard let slot = tiles.firstIndex(where: { $0 === tile }) else { return nil }
+        // The engine's editor lease names this tile's session and control epoch: a replaced
+        // link or camera, a lost authority or the next editor retires it (plan 7.5). Opening it
+        // closes every other editor first.
+        let lease = coordinator.openEditorLease(slot: slot)
         guard let camera = tile.camera else { return nil }
         let editor = CameraSession(borrowing: tile.decoder, controlsOnly: true)
         let model = AppModel(session: editor)
@@ -26,25 +32,16 @@ extension MultiviewSession {
         model.frameSamples = tile.sampleBus
         tile.controlsModel = model
         tile.previewDemand = true
-        // The engine's editor lease names this tile's session and control epoch: a replaced
-        // link or camera, a lost authority or the next editor retires it (plan 7.5).
-        let lease = try? editorLeases.open(
-            tile.entryID, in: multicamGroup(of: [tile]), at: multicamSnapshot(of: [tile]))
         editor.multiviewControlAdmission = { [weak self, weak tile, weak editor] in
             guard let self, let tile, let editor, let lease else { return false }
             return tile.controlsModel?.session === editor
-                && editorLeases.refusal(
-                    for: lease, in: multicamGroup(of: [tile]), at: multicamSnapshot(of: [tile]))
-                    == nil
+                && coordinator.editorAdmits(lease, slot: slot)
                 && controlsAvailable(for: tile)
         }
         return model
     }
 
-    func closeCameraSettings() {
-        editorLeases.closeAll()
-        for tile in tiles { tile.retireControls() }
-    }
+    func closeCameraSettings() { coordinator.closeEditors() }
 }
 
 struct MultiviewCameraSettings: View {

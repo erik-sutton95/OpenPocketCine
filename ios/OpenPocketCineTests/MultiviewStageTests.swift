@@ -131,35 +131,8 @@ import OpenCineDJIApple
         XCTAssertTrue(nano.lutEnabled)
     }
 
-    func testRecoveryDoesNotResetHealthyVideoForStalePresentation() {
-        var recovery = MultiviewRecovery()
-        let snapshot = FeedWatchdog.Snapshot(
-            now: 100, lastDecodedFrameAge: 20, lastVideoPacketAge: 0.01,
-            lastStatusAge: 0.1, flowHealthy: true, pathReady: true, hasFormat: true,
-            decoderFailed: false, live: true, sawPicture: true,
-            secondsSinceLastEnable: 50)
-        XCTAssertEqual(recovery.action(snapshot), .none)
-    }
-    func testFirstPictureFailureEscalatesBeyondBaseCooldown() {
-        var recovery = MultiviewRecovery()
-        func snapshot(_ time: Double) -> FeedWatchdog.Snapshot {
-            FeedWatchdog.Snapshot(
-                now: time, lastDecodedFrameAge: nil, lastVideoPacketAge: nil,
-                lastStatusAge: nil, flowHealthy: true, pathReady: true, hasFormat: false,
-                decoderFailed: false, live: true, sawPicture: false, hadVideo: false,
-                secondsSinceLastEnable: 50)
-        }
-        XCTAssertEqual(recovery.action(snapshot(100)), .resendLiveViewEnable)
-        XCTAssertEqual(recovery.action(snapshot(110)), .reopenDatalink)
-        XCTAssertEqual(recovery.action(snapshot(120)), .none)
-        var noNetwork = snapshot(130)
-        noNetwork.pathReady = false
-        XCTAssertEqual(recovery.action(noNetwork), .none)
-        var recentEnable = snapshot(130)
-        recentEnable.secondsSinceLastEnable = 1
-        XCTAssertEqual(recovery.action(recentEnable), .none)
-        XCTAssertEqual(recovery.action(snapshot(130)), .fullSessionRejoin)
-    }
+    // The DJI recovery ladder's own tests live with it in OpenCine (OpenCineDJITests'
+    // `MultiviewRecoveryTests`) since Shared Multiview Plan 3.
 
     func testBorrowedLiveViewDoesNotOwnOrCloseTileTransport() {
         let tile = MultiviewSession.Tile()
