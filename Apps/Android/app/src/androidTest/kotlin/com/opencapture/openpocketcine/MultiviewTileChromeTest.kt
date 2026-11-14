@@ -255,8 +255,6 @@ class MultiviewTileChromeTest {
             try {
                 scenario.onActivity { activity ->
                     stage = MultiviewSession(activity, saveStage = { true })
-                    MultiviewSession::class.java.getDeclaredField("running").apply { isAccessible = true }
-                        .setBoolean(stage, true)
                     repeat(2) { index ->
                         val tile = stage.tiles[index]
                         tile.camera = FoundCamera("camera-$index", "unused", "Camera $index", CameraModel("Osmo Pocket 4"), null)
@@ -267,6 +265,7 @@ class MultiviewTileChromeTest {
                             override fun cameraLocalIPv4(): String? = null
                         }, 9004, false, "osmo")
                         tile.controlHost = "unused"
+                        tile.recordingAvailable = true // fresh record state, as the stage's monitor reports it
                         tile.latestSettings = CameraStatus(shootingMode = CameraCommands.SHOOT_VIDEO,
                             isoIndex = 3, isoLimit = 6, expoMode = CameraCommands.EXPO_MANUAL, availableIsoIndices = listOf(3, 4, 5))
                     }
@@ -344,7 +343,7 @@ class MultiviewTileChromeTest {
                     assertEquals(0, first.session.pendingCameraSetCount)
                     assertEquals(0, stage.focusedIndex)
                     assertEquals(4, stage.tiles.size)
-                    stage.tiles[1].reset()
+                    assertTrue(stage.remove(stage.tiles[1]))
                 }
                 awaitCondition { stage.tiles[0].controlsModel != null }
                 awaitNode("A · Camera 0")
