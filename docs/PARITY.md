@@ -105,12 +105,16 @@ and accessibility identifiers are its own, now in OpenCine). Android moves to iO
 
 - The settings popup's rail follows iOS's order and titles: ISO, SHUTTER, EXPOSURE, WB, FOCUS,
   APERTURE, MODE, FORMAT, COLOR, AUDIO (before, mode came after color and the titles were mixed
-  case); camera tabs read upper-cased ("A · CAMERA 0").
+  case); camera tabs show upper-cased ("A · CAMERA 0"). TalkBack still reads them mixed case, as
+  VoiceOver does: "A · Camera 0", "Shutter", "Exposure"; the ISO tab now reads "Iso", iOS's label
+  (before, "ISO").
 - The popup keeps the editor across a record start or stop (mode, format and color lock, as on
   iOS; before, the editor closed and reopened). While a camera's controls are not ready it reads
   "Waiting for camera controls…" (before, "Camera settings are available when its connection is
-  ready."), and with the editor open but no control path "Controls unavailable".
-- Live View opens from a tile only while the camera is not recovering, as on iOS.
+  ready."), and with the editor open but no control path "Controls unavailable". The rail and the
+  lock follow the editor's own status, as before; the editor's command note sits under the
+  popup's status line ("Locked while recording", "Controls unavailable"), as on iOS.
+- The popup's close button no longer plays the selection haptic, as iOS's has none.
 - The locked Shared Wi-Fi page carries the network's saved password, as iOS's does.
 - With no camera on the focused slot the program readouts are empty instead of dashes.
 
