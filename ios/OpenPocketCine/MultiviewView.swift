@@ -88,8 +88,7 @@ extension MultiviewSession: MultiviewScreenHost {
             categories: MultiviewSettingsCategory.offered(
                 focus: model.session.supportsFocusMode, aperture: model.session.supportsAperture,
                 photo: model.session.status.isPhoto, audio: true),
-            recording: model.session.status.isRecording, note: model.session.controlNote,
-            described: model.control.snapshot != nil)
+            recording: model.session.status.isRecording, note: model.session.controlNote)
     }
 
     /// The tile's own datalink is open and no Live View borrows it.
@@ -155,13 +154,14 @@ extension MultiviewSession: MultiviewScreenHost {
     var stationServices: StationNetworkServices { PocketStationNetwork.services }
     var cameraSSIDs: Set<String> { Set(appModel?.savedCameras.compactMap(\.lastSSID) ?? []) }
 
-    func settingsAccessibilityValue(slot: Int) -> String {
+    /// The physical probe's preview value, DEBUG only (Release sets none, as before).
+    func settingsAccessibilityValue(slot: Int?) -> String? {
         #if DEBUG
-            if ProcessInfo.processInfo.environment["OPV_PHYSICAL_MULTIVIEW_PROBE"] == "1" {
-                return tiles[slot].previewAccessibilityValue
-            }
+            ProcessInfo.processInfo.environment["OPV_PHYSICAL_MULTIVIEW_PROBE"] == "1"
+                ? slot.map { tiles[$0].previewAccessibilityValue } ?? "" : ""
+        #else
+            nil
         #endif
-        return ""
     }
 }
 
