@@ -94,6 +94,36 @@ mounted. The instrumentation tests drive the adapter (a test-only tile reset,
 the background test on iOS's rule); they compile but were not run on a device.
 Physical Multiview remains untested for this change on both platforms.
 
+### Shared Multiview screen (Plan 4)
+
+Both shells now render OpenCine's shared `MultiviewScreen`: the stage, the Add camera list, the
+network wizard, the camera settings popup, borrowed Live View and the close and cleanup prompts.
+`MultiviewSession` is its `MultiviewScreenHost` on each platform and keeps only what Pocket has:
+the tile pictures and backdrop, the readings, the settings editor and its controls, Live View and
+the wizard's Wi-Fi values. iOS is the reference and does not change visibly (layout, copy, order
+and accessibility identifiers are its own, now in OpenCine). Android moves to iOS:
+
+- The settings popup's rail follows iOS's order and titles: ISO, SHUTTER, EXPOSURE, WB, FOCUS,
+  APERTURE, MODE, FORMAT, COLOR, AUDIO (before, mode came after color and the titles were mixed
+  case); camera tabs read upper-cased ("A · CAMERA 0").
+- The popup keeps the editor across a record start or stop (mode, format and color lock, as on
+  iOS; before, the editor closed and reopened). While a camera's controls are not ready it reads
+  "Waiting for camera controls…" (before, "Camera settings are available when its connection is
+  ready."), and with the editor open but no control path "Controls unavailable".
+- Live View opens from a tile only while the camera is not recovering, as on iOS.
+- The locked Shared Wi-Fi page carries the network's saved password, as iOS's does.
+- With no camera on the focused slot the program readouts are empty instead of dashes.
+
+Android keeps on purpose its per-tile menu and failure status card (Compose's look), the wizard's
+Wi-Fi name permission and its network path binding by source.
+
+On a private iOS simulator the 59 Multiview unit tests and the six Multiview UI flows (with the
+network wizard flow) pass before and after; the UI review screens match apart from animation
+phase (the recording tally, the record button's glow and the glass over them) and one keyboard
+transition in the wizard. Android's Multiview unit tests and lint pass; the instrumentation tests
+compile but were not run on a device. Physical Multiview remains untested for this change on both
+platforms.
+
 ### Multiview AUDIO admission continuation
 
 Android's Multiview settings categories now require the tile's typed AUDIO control to be
