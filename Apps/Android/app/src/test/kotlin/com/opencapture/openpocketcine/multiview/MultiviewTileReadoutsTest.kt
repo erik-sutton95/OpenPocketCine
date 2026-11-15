@@ -1,7 +1,6 @@
 package com.opencapture.openpocketcine.multiview
 
 import com.opencapture.opencine.appkit.MultiviewTile
-import com.opencapture.opencine.appkit.MultiviewTool
 import com.opencapture.opencine.core.CameraTimecode
 import com.opencapture.opencine.core.PowerStatus
 import com.opencapture.opencine.dji.DjiCameraSessionAdapter
@@ -84,10 +83,6 @@ class MultiviewTileReadoutsTest {
         assertNull(MultiviewTile.tileNote("Recording"))
         assertNull(MultiviewTile.tileNote("Recording stopped"))
         assertNull(MultiviewTile.tileNote(null))
-    }
-
-    @Test fun toolbarMatchesIOSOrder() {
-        assertEquals(listOf(MultiviewTool.LAYOUT, MultiviewTool.CAMERA, MultiviewTool.FIT, MultiviewTool.LUT), multiviewTools)
     }
 
     @Test fun compactReadoutsRetainIdentityAndUnknownFields() {

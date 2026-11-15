@@ -36,9 +36,9 @@ import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.opencine.vocabulary.CameraModel
 import com.opencapture.opencine.vocabulary.CameraStatus
 import com.opencapture.opencine.vocabulary.FoundCamera
-import com.opencapture.openpocketcine.multiview.MultiviewCameraSettings
+import com.opencapture.opencine.appkit.MultiviewCameraSettingsPanel
 import com.opencapture.openpocketcine.multiview.MultiviewSession
-import com.opencapture.openpocketcine.multiview.MultiviewStageContent
+import com.opencapture.opencine.appkit.MultiviewStageContent
 import com.opencapture.opencine.appkit.MultiviewCameraAction as MultiviewStageAction
 import com.opencapture.opencine.appkit.MultiviewReadout
 import com.opencapture.opencine.appkit.MultiviewRecordContext
@@ -175,7 +175,7 @@ class MultiviewTileChromeTest {
                                         val screen = it.positionOnScreen()
                                         origin.set(screen.x, screen.y)
                                     }) {
-                                        MultiviewStageContent(stage, layout, confirmsRecord = false, interactive = true,
+                                        MultiviewStageContent(stage.coordinator, stage.screenHost, layout, interactive = true,
                                             onAdd = {}, onOpenLive = {}, onSettings = { settingsOpened = true },
                                             onNetwork = {}, onExit = {}) {}
                                     }
@@ -290,7 +290,7 @@ class MultiviewTileChromeTest {
                                         android.graphics.RectF(origin.left + viewport.width - panelWidth, origin.top + panelY,
                                             origin.left + viewport.width, origin.top + panelY + panelHeight).roundOut(expectedPanel)
                                     }.testTag("multiview.settingsViewport")) {
-                                        MultiviewCameraSettings(stage, 0, width, height,
+                                        MultiviewCameraSettingsPanel(stage.coordinator, stage.screenHost, 0, width, height,
                                             MultiviewSafeArea(top = 24f, bottom = 20f)) {}
                                     }
                                 }
@@ -305,7 +305,7 @@ class MultiviewTileChromeTest {
                 val screen = android.graphics.Rect(expectedViewport)
                 assertTrue(panel.left > screen.left && panel.right == screen.right, "Side panel must attach to the trailing edge")
                 assertTrue(panel.top >= screen.top && panel.bottom <= screen.bottom)
-                for (label in listOf("Close camera settings", "A · Camera 0", "B · Camera 1", "ISO")) {
+                for (label in listOf("Close camera settings", "A · CAMERA 0", "B · CAMERA 1", "ISO")) {
                     val action = android.graphics.Rect().also { awaitNode(label).getBoundsInScreen(it) }
                     assertTrue(panel.contains(action), "$label $action must stay inside the side panel $panel")
                 }
@@ -336,7 +336,7 @@ class MultiviewTileChromeTest {
                     first.session.setIsoIndex(5)
                     assertEquals(2, first.session.pendingCameraSetCount)
                 }
-                click(awaitNode("B · Camera 1"))
+                click(awaitNode("B · CAMERA 1"))
                 awaitCondition { stage.tiles[1].controlsModel != null }
                 scenario.onActivity {
                     assertNull(stage.tiles[0].controlsModel)
@@ -346,7 +346,7 @@ class MultiviewTileChromeTest {
                     assertTrue(stage.remove(stage.tiles[1]))
                 }
                 awaitCondition { stage.tiles[0].controlsModel != null }
-                awaitNode("A · Camera 0")
+                awaitNode("A · CAMERA 0")
                 scenario.onActivity { assertEquals(0, stage.focusedIndex) }
             } finally { scenario.onActivity { stage.dispose() } }
         }
