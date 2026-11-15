@@ -1,6 +1,5 @@
 package com.opencapture.openpocketcine.multiview
 
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -17,8 +16,6 @@ import com.opencapture.opencine.vocabulary.CameraModel
 import com.opencapture.opencine.vocabulary.CameraStatus
 import com.opencapture.opencine.vocabulary.CaptureShutterPolicy
 import com.opencapture.opencine.vocabulary.ControlCapabilities
-import com.opencapture.openpocketcine.LiveDesign
-import com.opencapture.openpocketcine.LiveType
 
 /**
  * What the Multiview settings popup offers this camera now (OpenCine's shared order and lock):
@@ -32,24 +29,30 @@ internal fun multiviewSettingsCategories(camera: CameraModel, status: CameraStat
     audio = controls.audio.isOffered && CaptureShutterPolicy.showsAudioControls(status.shootingMode),
 )
 
-/** Pocket's Live View sheet for a shared settings category. */
-internal val MultiviewSettingsCategory.liveSheet: LiveSheet
-    get() = when (this) {
-        MultiviewSettingsCategory.ISO -> LiveSheet.ISO
-        MultiviewSettingsCategory.SHUTTER -> LiveSheet.SHUTTER
-        MultiviewSettingsCategory.EXPOSURE -> LiveSheet.EXPO
-        MultiviewSettingsCategory.WB -> LiveSheet.WB
-        MultiviewSettingsCategory.FOCUS -> LiveSheet.FOCUS
-        MultiviewSettingsCategory.APERTURE -> LiveSheet.APERTURE
-        MultiviewSettingsCategory.MODE -> LiveSheet.MODE
-        MultiviewSettingsCategory.RESOLUTION -> LiveSheet.FORMAT
-        MultiviewSettingsCategory.COLOR -> LiveSheet.COLOR
-        MultiviewSettingsCategory.AUDIO -> LiveSheet.AUDIO
-    }
+/**
+ * Pocket's Live View sheet for a shared settings category; null for one Pocket has no sheet for (as
+ * iOS `CaptureSheet(rawValue:)`), so a category OpenCine adds later shows no controls here instead of
+ * breaking the build.
+ */
+internal val MultiviewSettingsCategory.liveSheet: LiveSheet?
+    get() = LIVE_SHEETS[this]
+
+private val LIVE_SHEETS: Map<MultiviewSettingsCategory, LiveSheet> = mapOf(
+    MultiviewSettingsCategory.ISO to LiveSheet.ISO,
+    MultiviewSettingsCategory.SHUTTER to LiveSheet.SHUTTER,
+    MultiviewSettingsCategory.EXPOSURE to LiveSheet.EXPO,
+    MultiviewSettingsCategory.WB to LiveSheet.WB,
+    MultiviewSettingsCategory.FOCUS to LiveSheet.FOCUS,
+    MultiviewSettingsCategory.APERTURE to LiveSheet.APERTURE,
+    MultiviewSettingsCategory.MODE to LiveSheet.MODE,
+    MultiviewSettingsCategory.RESOLUTION to LiveSheet.FORMAT,
+    MultiviewSettingsCategory.COLOR to LiveSheet.COLOR,
+    MultiviewSettingsCategory.AUDIO to LiveSheet.AUDIO,
+)
 
 /**
- * The settings popup's controls on one tile: Live View's native pickers over the tile's open editor,
- * and the editor's last command note under them (the shared popup adds its own status lines).
+ * The settings popup's controls on one tile: Live View's native pickers over the tile's open editor
+ * (the shared popup adds its status line and the editor's note under them, as on iOS).
  */
 @Composable
 internal fun MultiviewSettingsControls(
@@ -60,17 +63,15 @@ internal fun MultiviewSettingsControls(
     close: () -> Unit,
 ) {
     val controls = tile.controlsModel ?: return
+    val sheet = category.liveSheet ?: return
     val status by controls.session.chromeStatus.collectAsState()
     // Changing camera, category, recording or mode retires any in-progress native drum gesture.
     key(controls, category, status.isRecording, status.shootingMode) {
         LiveControlSheet(
-            category.liveSheet, controls, status, locked = locked,
+            sheet, controls, status, locked = locked,
             onDismiss = close, maxHeightDp = maxHeight, portrait = false, showsHeader = false,
         )
     }
-    // Compact error line; it takes space only while present.
-    val note by controls.session.controlNote.collectAsState()
-    note?.let { Text(it, color = LiveDesign.amber, style = LiveType.text(11f), maxLines = 2) }
 }
 
 /** Tile source and native preview-owner facts for the common image-preview lifecycle. */

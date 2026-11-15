@@ -305,7 +305,7 @@ class MultiviewTileChromeTest {
                 val screen = android.graphics.Rect(expectedViewport)
                 assertTrue(panel.left > screen.left && panel.right == screen.right, "Side panel must attach to the trailing edge")
                 assertTrue(panel.top >= screen.top && panel.bottom <= screen.bottom)
-                for (label in listOf("Close camera settings", "A · CAMERA 0", "B · CAMERA 1", "ISO")) {
+                for (label in listOf("Close camera settings", "A · Camera 0", "B · Camera 1", "ISO")) {
                     val action = android.graphics.Rect().also { awaitNode(label).getBoundsInScreen(it) }
                     assertTrue(panel.contains(action), "$label $action must stay inside the side panel $panel")
                 }
@@ -336,7 +336,7 @@ class MultiviewTileChromeTest {
                     first.session.setIsoIndex(5)
                     assertEquals(2, first.session.pendingCameraSetCount)
                 }
-                click(awaitNode("B · CAMERA 1"))
+                click(awaitNode("B · Camera 1"))
                 awaitCondition { stage.tiles[1].controlsModel != null }
                 scenario.onActivity {
                     assertNull(stage.tiles[0].controlsModel)
@@ -346,7 +346,7 @@ class MultiviewTileChromeTest {
                     assertTrue(stage.remove(stage.tiles[1]))
                 }
                 awaitCondition { stage.tiles[0].controlsModel != null }
-                awaitNode("A · CAMERA 0")
+                awaitNode("A · Camera 0")
                 scenario.onActivity { assertEquals(0, stage.focusedIndex) }
             } finally { scenario.onActivity { stage.dispose() } }
         }

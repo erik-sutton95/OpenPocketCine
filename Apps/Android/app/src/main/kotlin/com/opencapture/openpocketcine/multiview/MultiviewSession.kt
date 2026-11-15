@@ -88,6 +88,7 @@ import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -209,7 +210,20 @@ class MultiviewSession(
         /** Settings use their own command model, never the tile's presentation owner. */
         var controlsModel by mutableStateOf<AppModel?>(null)
             private set
+        /**
+         * The open editor's own status and command note, followed while it is open: the settings
+         * popup's rail, lock and note read them live (not the tile's throttled [settings]).
+         */
+        var editorStatus by mutableStateOf<CameraStatus?>(null)
+            private set
+        var editorNote by mutableStateOf<String?>(null)
+            private set
+        private var editorFollow: Job? = null
         fun closeControls() {
+            editorFollow?.cancel()
+            editorFollow = null
+            editorStatus = null
+            editorNote = null
             controlsModel?.close()
             controlsModel = null
         }
@@ -224,11 +238,17 @@ class MultiviewSession(
                 onSet = { lastCommandAt = it },
             )
             if (!lease.allows()) return null
-            return AppModel(app, borrowing = decoder, controlLease = lease).also {
-                it.session.updateMultiview(camera, endpoint, latestSettings)
+            return AppModel(app, borrowing = decoder, controlLease = lease).also { model ->
+                model.session.updateMultiview(camera, endpoint, latestSettings)
                 // The capture drums edit through the shared control model; close() unbinds it.
-                it.control.bind(it.session.control)
-                controlsModel = it
+                model.control.bind(model.session.control)
+                controlsModel = model
+                editorStatus = model.session.chromeStatus.value
+                editorNote = model.session.controlNote.value
+                editorFollow = scope.launch {
+                    launch { model.session.chromeStatus.collect { editorStatus = it } }
+                    model.session.controlNote.collect { editorNote = it }
+                }
             }
         }
         var driver: DatalinkDriver? = null
@@ -921,10 +941,13 @@ class MultiviewSession(
             val tile = tiles[slot]
             val camera = tile.camera ?: return null
             val controls = tile.controlsModel ?: return null
-            // The tile's throttled status recomposes the popup; the editor's own status drives its drums.
+            // The editor's own status and note, as before the shared popup and as on iOS: the
+            // categories and the lock follow it live, and the note sits under the popup's status line.
+            val status = tile.editorStatus ?: tile.settings
             return MultiviewCameraSettingsState(
-                categories = multiviewSettingsCategories(camera.model, tile.settings, controls.controlCapabilities()),
-                recording = tile.settings.isRecording,
+                categories = multiviewSettingsCategories(camera.model, status, controls.controlCapabilities()),
+                recording = status.isRecording,
+                note = tile.editorNote,
             )
         }
 
