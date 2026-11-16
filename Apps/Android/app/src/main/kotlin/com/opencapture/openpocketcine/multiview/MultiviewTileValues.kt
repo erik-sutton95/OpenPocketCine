@@ -3,8 +3,10 @@ package com.opencapture.openpocketcine.multiview
 import com.opencapture.opencine.appkit.MultiviewCameraAction
 import com.opencapture.opencine.appkit.MultiviewReadout
 import com.opencapture.opencine.appkit.MultiviewRecordContext
+import com.opencapture.opencine.appkit.MultiviewTally
 import com.opencapture.opencine.appkit.MultiviewTile
 import com.opencapture.opencine.appkit.MultiviewTileStatus
+import com.opencapture.opencine.appkit.MultiviewTool
 import com.opencapture.opencine.appkit.withPower
 import com.opencapture.opencine.dji.hasMultiviewPreview
 import com.opencapture.opencine.core.PowerStatus
@@ -16,6 +18,13 @@ import com.opencapture.opencine.vocabulary.storageReadout
 import com.opencapture.opencine.media.storageReadout
 import com.opencapture.opencine.core.StorageStatus
 import com.opencapture.opencine.vocabulary.VideoResolution
+
+/** The toolbar in iOS order (Pocket iOS `MultiviewStage` tools). */
+internal val multiviewTools = listOf(MultiviewTool.LAYOUT, MultiviewTool.CAMERA, MultiviewTool.FIT, MultiviewTool.LUT)
+
+/** The note on the tile itself: iOS keeps the plain recording confirmations off it. */
+internal fun multiviewTileNote(note: String?): String? =
+    note.takeUnless { it == "Recording" || it == "Recording stopped" }
 
 /** Display values come from the existing throttled tile status; no telemetry polling. */
 internal data class MultiviewTileReadouts(
@@ -34,20 +43,17 @@ internal data class MultiviewTileReadouts(
 internal fun multiviewTileReadouts(
     index: Int, name: String, model: String, settings: CameraStatus, timecode: String?,
     recordingObservation: Boolean?, recordingAvailable: Boolean, recordingBusy: Boolean,
-    recovering: Boolean, hasPicture: Boolean, failure: String?, recordingNote: String? = null,
+    recovering: Boolean, hasPicture: Boolean, failure: String?,
     power: PowerStatus,
     colorFamily: String = "pocket",
     storage: StorageStatus? = null,
 ): MultiviewTileReadouts {
     val elapsed = settings.recordElapsedSec.coerceAtLeast(0)
-    val recording = when {
-        recordingBusy -> "WAIT"
-        recordingNote?.contains("rejected") == true || recordingNote?.contains("No confirmation") == true -> "REC ?"
-        recovering -> "HOLD"
-        !recordingAvailable || recordingObservation == null -> "REC —"
-        recordingObservation -> "REC ${elapsed / 60}:${(elapsed % 60).toString().padStart(2, '0')}"
-        else -> "STBY"
-    }
+    // As iOS: the last reported observation is shown even when status is stale.
+    val recording = MultiviewTally.text(
+        recording = recordingObservation,
+        seconds = elapsed, waiting = recordingBusy, holding = recovering, failed = failure != null,
+    )
     val resolution = VideoResolution.fromRaw(settings.resolutionCode)?.label ?: "—"
     val fps = if (settings.fps > 0) "${settings.fps}p" else "—"
     val color = if (settings.colorMode < 0) "—" else CameraCommands.colorLabel(settings.colorMode, colorFamily)
@@ -57,7 +63,7 @@ internal fun multiviewTileReadouts(
         battery = cameraBatteryReadoutLabel(power.batteryReading) ?: "\u2014",
         storage = (if (storage != null) storage.storageReadout else settings.storageReadout)?.free ?: StorageReadout.UNAVAILABLE,
         recording = recording, isRecording = recordingObservation == true,
-        format = "$resolution · $fps · $color",
+        format = "$resolution $fps · $color",
         recovery = when {
             failure != null -> "Connection needs attention"
             recovering -> "Restoring picture…"
@@ -100,7 +106,7 @@ internal fun MultiviewSession.stageTile(index: Int): MultiviewTile? {
     val readouts = multiviewTileReadouts(
         index, camera.name, camera.model.name, tile.settings, tile.timecodeReadout,
         tile.recordingObservation?.first, tile.recordingAvailable,
-        tile.recordingBusy, tile.recovering, tile.hasPicture, tile.failureMessage, tile.recordingNote,
+        tile.recordingBusy, tile.recovering, tile.hasPicture, tile.failureMessage,
         power = power, colorFamily = camera.model.family, storage = tile.control.snapshots.value.storage,
     )
     val settled = !busy && !tile.connecting && !tile.recovering
@@ -110,6 +116,7 @@ internal fun MultiviewSession.stageTile(index: Int): MultiviewTile? {
         name = camera.name, model = camera.model.name, format = readouts.format,
         storage = readouts.storage, timecode = tile.timecodeReadout,
         tally = readouts.recording, recording = readouts.isRecording, lut = tile.lutEnabled,
+        note = tile.recordingNote, tileNote = multiviewTileNote(tile.recordingNote),
         readouts = multiviewStageReadouts(tile.settings),
         status = readouts.recovery?.let { text ->
             MultiviewTileStatus(

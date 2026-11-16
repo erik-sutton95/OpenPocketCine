@@ -1,4 +1,5 @@
 import Foundation
+import OpenCineAppKit
 import OpenCineMulticam
 import Security
 
@@ -13,57 +14,19 @@ enum MultiviewQualificationPolicy {
     }
 }
 
-/// Device-only stage metadata. Network credentials stay in MultiviewNetworkStore.
-enum MultiviewStageStore {
-    struct Camera: Codable, Equatable {
-        var slot: Int
-        var id: UUID
-        var name: String
-        var modelId: Int?
-        var identity: [UInt8]?
-        var address: String
-        var experimental: Bool
-        var lutEnabled: Bool
-    }
-    struct Stage: Codable, Equatable {
-        var version = 1
-        var ssid: String
-        var hotspot: Bool
-        var layout: String
-        var focusedIndex: Int
-        var cameras: [Camera]
-        var pendingReset: [Camera]?
-        var returnedToCameraWiFi: Bool?
-        var fill: Bool?
+extension MultiviewStageJournal.Stage {
+    /// The stage when it is safe to restore with this app's tile count.
+    var validated: Self? { validated(tileCount: MultiviewQualificationPolicy.tileCount) }
+}
 
-        var validated: Stage? {
-            let cleanup = pendingReset ?? []
-            guard version == 1,
-                !ssid.isEmpty || (cameras.isEmpty && !cleanup.isEmpty),
-                cameras.count <= MultiviewQualificationPolicy.tileCount,
-                (0..<MultiviewQualificationPolicy.tileCount).contains(focusedIndex),
-                Set(cameras.map(\.slot)).count == cameras.count,
-                Set(cameras.map(\.id)).count == cameras.count,
-                Set(cleanup.map(\.id)).count == cleanup.count,
-                cleanup.allSatisfy({ !$0.name.isEmpty }),
-                cameras.allSatisfy({
-                    (0..<MultiviewQualificationPolicy.tileCount).contains($0.slot)
-                        && !$0.name.isEmpty
-                })
-            else { return nil }
-            return self
-        }
-    }
+/// Device-only stage metadata. Network credentials stay in MultiviewNetworkStore. The values and
+/// rules are OpenCine's `MultiviewStageJournal`; this keeps the Keychain and this app's tile count.
+enum MultiviewStageStore {
+    typealias Camera = MultiviewStageJournal.Camera
+    typealias Stage = MultiviewStageJournal.Stage
+
     static func cleanupTargets(_ pending: [Camera], including cameras: [Camera]) -> [Camera] {
-        var result = pending
-        for camera in cameras {
-            if let index = result.firstIndex(where: { $0.id == camera.id }) {
-                result[index] = camera
-            } else {
-                result.append(camera)
-            }
-        }
-        return result
+        MultiviewStageJournal.cleanupTargets(pending, including: cameras)
     }
     private static var query: [String: Any] {
         [

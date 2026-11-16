@@ -279,7 +279,7 @@ internal fun MultiviewStageContent(
         tiles = session.tiles.indices.map { session.stageTile(it) },
         layout = layout, arrangement = session.layout.arrangement, selected = session.focusedIndex,
         fill = session.fill,
-        tools = listOf(MultiviewTool.LAYOUT, MultiviewTool.LUT, MultiviewTool.FIT, MultiviewTool.CAMERA),
+        tools = multiviewTools,
         readouts = multiviewStageReadouts(session.tiles.getOrNull(session.focusedIndex)?.settings ?: CameraStatus()),
         recording = session.anyRecording, groupBusy = session.groupRecordingBusy, confirmsRecord = confirmsRecord,
         actions = MultiviewStageActions(

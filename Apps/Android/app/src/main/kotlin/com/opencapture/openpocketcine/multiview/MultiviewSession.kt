@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.opencapture.opencine.appkit.MultiviewStageJournal
 import com.opencapture.opencine.appkit.MultiviewStageState
 import com.opencapture.opencine.appkit.MultiviewStageLayout
 import com.opencapture.opencine.appkit.MultiviewStagePreferences
@@ -114,9 +115,9 @@ class MultiviewRecoveryLadder {
  */
 class MultiviewSession(
     context: Context,
-    private val saveStage: (MultiviewStageStore.Stage?) -> Boolean = { MultiviewStageStore.save(context, it) },
+    private val saveStage: (MultiviewStageJournal.Stage?) -> Boolean = { MultiviewStageStore.save(context, it) },
     private val networkStore: MultiviewNetworkStore = MultiviewNetworkStore(context),
-    private val resetCamera: (suspend (MultiviewStageStore.Camera) -> Boolean)? = null,
+    private val resetCamera: (suspend (MultiviewStageJournal.Camera) -> Boolean)? = null,
 ) {
     private val app = context.applicationContext
 
@@ -432,7 +433,7 @@ class MultiviewSession(
     private val connectionJobs = HashMap<String, Job>()
     private var hostJoin: kotlinx.coroutines.Deferred<Unit>? = null
     private val addressReservations = HashMap<String, String>()
-    private var pendingReset: List<MultiviewStageStore.Camera> = emptyList()
+    private var pendingReset: List<MultiviewStageJournal.Camera> = emptyList()
     private val stationResets = HashMap<String, kotlinx.coroutines.Deferred<Boolean>>()
     private var cleanupJournalWritten = false
     private var scanJob: Job? = null
@@ -711,11 +712,11 @@ class MultiviewSession(
     fun savedNetworks(): List<MultiviewNetworkStore.Network> = networkStore.savedNetworks()
 
     private fun recordStationChange(camera: FoundCamera): Boolean {
-        val saved = MultiviewStageStore.Camera(
+        val saved = MultiviewStageJournal.Camera(
             slot = 0, id = camera.id, name = camera.name, modelId = camera.modelId,
-            bleAddress = camera.address, identity = null, address = "", experimental = false, lutEnabled = true,
+            deviceAddress = camera.address, identity = null, address = "", experimental = false, lutEnabled = true,
         )
-        pendingReset = MultiviewStageStore.cleanupTargets(pendingReset, listOf(saved))
+        pendingReset = MultiviewStageJournal.cleanupTargets(pendingReset, listOf(saved))
         return persistStage()
     }
 
@@ -1239,12 +1240,12 @@ class MultiviewSession(
 
     // --- Stage persistence and cleanup ---------------------------------------------------------------
 
-    private fun savedCameras(): List<MultiviewStageStore.Camera> =
+    private fun savedCameras(): List<MultiviewStageJournal.Camera> =
         tiles.mapNotNull { tile ->
             val camera = tile.camera ?: return@mapNotNull null
-            MultiviewStageStore.Camera(
+            MultiviewStageJournal.Camera(
                 slot = tile.index, id = camera.id, name = camera.name, modelId = camera.modelId,
-                bleAddress = camera.address, identity = tile.identity, address = tile.cameraAddress,
+                deviceAddress = camera.address, identity = tile.identity, address = tile.cameraAddress,
                 experimental = tile.experimentalNetwork, lutEnabled = tile.lutEnabled,
             )
         }
@@ -1258,14 +1259,14 @@ class MultiviewSession(
         }
         val saved = savedCameras()
         val success = saveStage(
-            MultiviewStageStore.Stage(
+            MultiviewStageJournal.Stage(
                 ssid = if (networkConfigured) ssid else "",
                 hotspot = usePhoneHotspot,
                 layout = layout.raw,
                 focusedIndex = focusedIndex,
                 cameras = saved,
                 pendingReset = if (running && !closing) {
-                    MultiviewStageStore.cleanupTargets(pendingReset, saved)
+                    MultiviewStageJournal.cleanupTargets(pendingReset, saved)
                 } else {
                     pendingReset
                 },
@@ -1282,11 +1283,11 @@ class MultiviewSession(
      * A new session always asks for a network and starts with empty slots. Old
      * stages supply presentation preferences and cleanup obligations only.
      */
-    fun restoreStage(stage: MultiviewStageStore.Stage? = MultiviewStageStore.load(app)) {
+    fun restoreStage(stage: MultiviewStageJournal.Stage? = MultiviewStageStore.load(app)) {
         stage ?: return
         pendingReset = stage.pendingReset.orEmpty()
         if (stage.returnedToCameraWiFi != true) {
-            pendingReset = MultiviewStageStore.cleanupTargets(pendingReset, stage.cameras)
+            pendingReset = MultiviewStageJournal.cleanupTargets(pendingReset, stage.cameras)
         }
         cleanupJournalWritten = pendingReset.isNotEmpty()
         presentation.importLegacy(MultiviewStagePreferences(
@@ -1304,7 +1305,7 @@ class MultiviewSession(
         if (closing) return false
         closing = true
         networkScanJob?.cancelAndJoin()
-        if (running) pendingReset = MultiviewStageStore.cleanupTargets(pendingReset, savedCameras())
+        if (running) pendingReset = MultiviewStageJournal.cleanupTargets(pendingReset, savedCameras())
         persistStage()
         stop()
         coroutineScope { pendingReset.map { saved -> async { resetStationOnce(saved) } }.awaitAll() }
@@ -1318,7 +1319,7 @@ class MultiviewSession(
     }
 
     /** Shared by scan completion, close and restored cleanup; one reset per camera at a time. */
-    suspend fun resetStationOnce(saved: MultiviewStageStore.Camera): Boolean {
+    suspend fun resetStationOnce(saved: MultiviewStageJournal.Camera): Boolean {
         stationResets[saved.id]?.let { return it.await() }
         if (pendingReset.none { it.id == saved.id }) return true
         val task = scope.async {
@@ -1334,8 +1335,8 @@ class MultiviewSession(
         return task.await()
     }
 
-    private suspend fun resetStation(saved: MultiviewStageStore.Camera): Boolean {
-        if (saved.bleAddress.isEmpty()) return false
+    private suspend fun resetStation(saved: MultiviewStageJournal.Camera): Boolean {
+        if (saved.deviceAddress.isNullOrEmpty()) return false
         val client = MultiviewProvisioner(app)
         return try {
             client.connect(restoredCamera(saved), pairingTimeoutMs = 12_000)
@@ -1353,10 +1354,10 @@ class MultiviewSession(
         }
     }
 
-    private fun restoredCamera(saved: MultiviewStageStore.Camera): FoundCamera {
+    private fun restoredCamera(saved: MultiviewStageJournal.Camera): FoundCamera {
         val model = com.opencapture.opencine.vocabulary.CameraModel.fromJson(
-            DjiNative.resolveCameraModel(saved.modelId ?: -1, saved.name, saved.bleAddress, true))
-        return FoundCamera(saved.id, saved.bleAddress, saved.name, model, saved.modelId)
+            DjiNative.resolveCameraModel(saved.modelId ?: -1, saved.name, saved.deviceAddress.orEmpty(), true))
+        return FoundCamera(saved.id, saved.deviceAddress.orEmpty(), saved.name, model, saved.modelId)
     }
 
     // --- Tile surfaces --------------------------------------------------------------------------------
