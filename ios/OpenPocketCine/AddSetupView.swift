@@ -58,7 +58,9 @@ private struct PocketSetupDestination: View {
                     kind: network.hotspot ? .phoneHotspot : .infrastructureNetwork,
                     network: network.ssid, secret: network.password))
                 return true
-            }, close: { done(nil) }, path: path
+            }, close: { done(nil) }, path: path,
+            // Only Multiview locks the network; Add setup never shows the locked page.
+            complete: { done(nil) }
         )
         .presentationBackground(MonitorTheme.background)
     }
@@ -81,7 +83,7 @@ enum PocketStationNetwork {
         StationNetworkServices(
             savedNetworks: {
                 MultiviewNetworkStore.savedNetworks().map {
-                    StationNetwork(ssid: $0.ssid, password: $0.password, hotspot: $0.hotspot ?? false)
+                    StationNetwork(ssid: $0.ssid, password: $0.password, hotspot: $0.hotspot)
                 }
             },
             currentSSID: { await DjiAppleWiFiJoiner.currentSSID() },

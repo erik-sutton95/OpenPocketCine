@@ -7,7 +7,7 @@ import com.opencapture.openpocketcine.pairing.lastSSID
 import com.opencapture.openpocketcine.pairing.POCKET_STATION_BRAND
 import com.opencapture.openpocketcine.pairing.asStationNetworks
 import com.opencapture.openpocketcine.pairing.rememberWifiNameAccess
-import com.opencapture.opencine.appkit.StationNetwork
+import com.opencapture.opencine.core.StationNetwork
 import com.opencapture.opencine.appkit.StationNetworkSetup
 
 import android.graphics.SurfaceTexture

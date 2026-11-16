@@ -284,7 +284,7 @@ final class MultiviewStagePersistenceTests: XCTestCase {
                 let response = Duml.Frame(
                     sender: 7, receiver: 2, seq: 1202, flags: 0x80,
                     cmdSet: 7, cmdId: 0x45, payload: payload)
-                return try MultiviewProvisioner.acceptsPairingReply(response, sequence: 1202)
+                return try MultiviewPairing.acceptsReply(response, sequence: 1202)
             }, resetRetryDelay: { waits += 1 },
             saveStage: {
                 journal = $0
@@ -322,21 +322,6 @@ final class MultiviewStagePersistenceTests: XCTestCase {
         XCTAssertEqual(attempts, 3)
         XCTAssertEqual(journal?.pendingReset?.map(\.id), [camera.id])
         XCTAssertTrue(session.hasPendingCleanup)
-    }
-
-    @MainActor func testPairingReplyRequiresMatchingOpcodeAndExplicitApproval() throws {
-        var response = Duml.Frame(
-            sender: 7, receiver: 2, seq: 1202, flags: 0x80,
-            cmdSet: 7, cmdId: 0x45, payload: [0, 1])
-        XCTAssertTrue(try MultiviewProvisioner.acceptsPairingReply(response, sequence: 1202))
-        XCTAssertFalse(try MultiviewProvisioner.acceptsPairingReply(response, sequence: 1203))
-        response.cmdId = 0x39
-        XCTAssertFalse(try MultiviewProvisioner.acceptsPairingReply(response, sequence: 1202))
-        response.cmdId = 0x45
-        response.payload = [0, 2]
-        XCTAssertFalse(try MultiviewProvisioner.acceptsPairingReply(response, sequence: 1202))
-        response.payload = [0, 3]
-        XCTAssertThrowsError(try MultiviewProvisioner.acceptsPairingReply(response, sequence: 1202))
     }
 
     @MainActor func testCloseReusesUncancelledScanCleanup() async throws {

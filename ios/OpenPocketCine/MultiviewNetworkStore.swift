@@ -3,7 +3,7 @@ import OpenCineApple
 /// Last shared network, stored only in this device's Keychain. The saved-network rules live in
 /// OpenCine's `SharedNetworkStore`; this keeps this app's Keychain service name.
 enum MultiviewNetworkStore {
-    typealias Network = SharedNetwork
+    typealias Network = SharedNetworkStore.Network
 
     private static let store = SharedNetworkStore(
         storage: KeychainSharedNetworkStorage(
