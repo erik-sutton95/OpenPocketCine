@@ -2,4 +2,4 @@
 # CI and Xcode Cloud check out this commit as the sibling ../OpenCine (scripts/checkout-opencine.sh)
 # and verify the SHA, so a moved branch upstream cannot change what ships.
 # Temporary: replaced by a SwiftPM url + version and Maven coordinates once published.
-OpenCine c533ec646ec7b52a439feb9ffb3e37c835eacabb
+OpenCine 0b3d09a62e000eac04ffef4f752cf416ab56f18e
