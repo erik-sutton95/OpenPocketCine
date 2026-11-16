@@ -25,7 +25,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.opencapture.opencine.appkit.MultiviewStageJournal
 import com.opencapture.opencine.appkit.MultiviewCoordinator
+import com.opencapture.opencine.appkit.MultiviewCameraSettingsState
 import com.opencapture.opencine.appkit.MultiviewHost
+import com.opencapture.opencine.appkit.MultiviewScreenHost
+import com.opencapture.opencine.appkit.MultiviewSettingsCategory
+import com.opencapture.opencine.appkit.MultiviewTileReadings
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import com.opencapture.openpocketcine.controlCapabilities
 import com.opencapture.opencine.appkit.MultiviewJournalStorage
 import com.opencapture.opencine.appkit.MultiviewMember
 import com.opencapture.opencine.appkit.MultiviewMemberChange
@@ -81,6 +88,7 @@ import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -202,7 +210,20 @@ class MultiviewSession(
         /** Settings use their own command model, never the tile's presentation owner. */
         var controlsModel by mutableStateOf<AppModel?>(null)
             private set
+        /**
+         * The open editor's own status and command note, followed while it is open: the settings
+         * popup's rail, lock and note read them live (not the tile's throttled [settings]).
+         */
+        var editorStatus by mutableStateOf<CameraStatus?>(null)
+            private set
+        var editorNote by mutableStateOf<String?>(null)
+            private set
+        private var editorFollow: Job? = null
         fun closeControls() {
+            editorFollow?.cancel()
+            editorFollow = null
+            editorStatus = null
+            editorNote = null
             controlsModel?.close()
             controlsModel = null
         }
@@ -211,20 +232,23 @@ class MultiviewSession(
             closeControls()
             val camera = camera ?: return null
             val endpoint = driver ?: return null
-            val recording = latestSettings.isRecording
+            // As iOS: a record start or stop keeps the editor (the popup locks mode, format and color).
             val lease = MultiviewControlLease(
-                isCurrent = {
-                    this.camera?.id == camera.id && driver === endpoint &&
-                        latestSettings.isRecording == recording && admits()
-                },
+                isCurrent = { this.camera?.id == camera.id && driver === endpoint && admits() },
                 onSet = { lastCommandAt = it },
             )
             if (!lease.allows()) return null
-            return AppModel(app, borrowing = decoder, controlLease = lease).also {
-                it.session.updateMultiview(camera, endpoint, latestSettings)
+            return AppModel(app, borrowing = decoder, controlLease = lease).also { model ->
+                model.session.updateMultiview(camera, endpoint, latestSettings)
                 // The capture drums edit through the shared control model; close() unbinds it.
-                it.control.bind(it.session.control)
-                controlsModel = it
+                model.control.bind(model.session.control)
+                controlsModel = model
+                editorStatus = model.session.chromeStatus.value
+                editorNote = model.session.controlNote.value
+                editorFollow = scope.launch {
+                    launch { model.session.chromeStatus.collect { editorStatus = it } }
+                    model.session.controlNote.collect { editorNote = it }
+                }
             }
         }
         var driver: DatalinkDriver? = null
@@ -686,6 +710,12 @@ class MultiviewSession(
      */
     val coordinator: MultiviewCoordinator<FoundCamera, Tile>
 
+    /**
+     * The coordinator's and the shared screen's host: what only Pocket has (pictures, surfaces,
+     * readings, Live View, editors and the network wizard's values).
+     */
+    internal val screenHost: MultiviewScreenHost = Host()
+
     init {
         val commissioner = PocketStationCommissioner(
             DjiStationCommissioner(app, path, ::log), resetCamera,
@@ -711,8 +741,11 @@ class MultiviewSession(
             probeWidth = 24,
             clock = SystemClock::elapsedRealtime,
         )
-        coordinator.host = Host()
+        coordinator.host = screenHost
     }
+
+    /** The app model the screen shows this stage for (record confirmation, saved cameras). */
+    internal var appModel by mutableStateOf<AppModel?>(null)
 
     val found: List<FoundCamera> get() = coordinator.found
     var busy: Boolean
@@ -764,10 +797,8 @@ class MultiviewSession(
     val connectingCameras: Boolean get() = coordinator.connectingCameras
     val hasPendingCleanup: Boolean get() = coordinator.hasPendingCleanup
 
-    /** The stage's rule, plus what only Pocket knows: the tile's own open datalink and a borrowed Live View. */
-    internal fun controlsAvailable(tile: Tile): Boolean =
-        coordinator.controlsAvailable(tile.index) &&
-            tile.driver?.let { !it.isClosed && !it.isRebuilding } == true && tile.liveModel == null
+    /** The stage's rule, with what only Pocket knows (the host's [MultiviewHost.admitsControls]). */
+    internal fun controlsAvailable(tile: Tile): Boolean = coordinator.controlsAvailable(tile.index)
 
     /**
      * One settings editor at a time. The engine's editor lease names the tile's session and control
@@ -893,8 +924,60 @@ class MultiviewSession(
 
     private fun log(line: String) = multiviewLog(line)
 
-    /** The coordinator's host: what only Pocket has (pictures, surfaces, Live View, editors). */
-    private inner class Host : MultiviewHost {
+    private inner class Host : MultiviewScreenHost {
+        override val confirmsRecord: Boolean get() = appModel?.recordConfirmationEnabled ?: true
+        override val editsCameraSettings: Boolean get() = true
+        override val appliesAutoLUT: Boolean get() = true
+
+        override fun readings(slot: Int): MultiviewTileReadings? = tileReadings(slot)
+
+        override fun lutChanged(slot: Int) = tiles[slot].updateLUT()
+
+        override fun openCameraSettings(slot: Int) {
+            openControls(tiles[slot])
+        }
+
+        override fun cameraSettings(slot: Int): MultiviewCameraSettingsState? {
+            val tile = tiles[slot]
+            val camera = tile.camera ?: return null
+            val controls = tile.controlsModel ?: return null
+            // The editor's own status and note, as before the shared popup and as on iOS: the
+            // categories and the lock follow it live, and the note sits under the popup's status line.
+            val status = tile.editorStatus ?: tile.settings
+            return MultiviewCameraSettingsState(
+                categories = multiviewSettingsCategories(camera.model, status, controls.controlCapabilities()),
+                recording = status.isRecording,
+                note = tile.editorNote,
+            )
+        }
+
+        /** Only Pocket knows the tile's own datalink is open and its Live View is not borrowed. */
+        override fun admitsControls(slot: Int): Boolean {
+            val tile = tiles[slot]
+            return tile.driver?.let { !it.isClosed && !it.isRebuilding } == true && tile.liveModel == null
+        }
+
+        @Composable
+        override fun Picture(slot: Int, fill: Boolean) {
+            val tile = tiles[slot]
+            if (tile.liveModel == null) TileFeed(this@MultiviewSession, tile, fill)
+        }
+
+        @Composable
+        override fun SettingsPreview(slot: Int, modifier: Modifier) = MultiviewSettingsPreview(tiles[slot], modifier)
+
+        @Composable
+        override fun SettingsControls(
+            slot: Int, category: MultiviewSettingsCategory, locked: Boolean, maxHeight: Float, close: () -> Unit,
+        ) = MultiviewSettingsControls(tiles[slot], category, locked, maxHeight, close)
+
+        @Composable
+        override fun LiveView(slot: Int, exit: () -> Unit) = MultiviewBorrowedLiveView(tiles[slot], exit)
+
+        @Composable
+        override fun NetworkSetup(lockedNetwork: StationNetwork?, cancel: () -> Unit, complete: () -> Unit) =
+            PocketMultiviewNetworkSetup(this@MultiviewSession, lockedNetwork, cancel, complete)
+
         override fun openLiveView(slot: Int): Boolean {
             val tile = tiles[slot]
             val camera = tile.camera ?: return false

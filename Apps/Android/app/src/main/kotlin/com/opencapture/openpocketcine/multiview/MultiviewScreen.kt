@@ -1,32 +1,11 @@
 package com.opencapture.openpocketcine.multiview
 
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.detectTapGestures
-import com.opencapture.opencine.vocabulary.CameraStatus
-import com.opencapture.openpocketcine.pairing.lastSSID
-import com.opencapture.openpocketcine.pairing.POCKET_STATION_BRAND
-import com.opencapture.openpocketcine.pairing.asStationNetworks
-import com.opencapture.openpocketcine.pairing.rememberWifiNameAccess
-import com.opencapture.opencine.core.StationNetwork
-import com.opencapture.opencine.appkit.StationNetworkSetup
-
 import android.graphics.SurfaceTexture
 import android.view.Surface
 import android.view.TextureView
-import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -34,7 +13,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,293 +20,52 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.opencapture.monitorui.MonitorIcon
-import com.opencapture.monitorui.MonitorPalette
-import com.opencapture.monitorui.MultiviewArrangement
-import com.opencapture.monitorui.MultiviewPresentationLayout
-import com.opencapture.monitorui.MultiviewSafeArea
-import com.opencapture.opencine.appkit.LocalOperatorHaptics
-import com.opencapture.opencine.appkit.MultiviewCameraAction
-import com.opencapture.opencine.appkit.MultiviewCameraPicker
-import com.opencapture.opencine.appkit.MultiviewPickerRow
-import com.opencapture.opencine.appkit.MultiviewStage
-import com.opencapture.opencine.appkit.MultiviewStageSurface
-import com.opencapture.opencine.appkit.MultiviewStageStateProvider
-import com.opencapture.opencine.appkit.MultiviewStageServices
-import com.opencapture.opencine.appkit.MultiviewStageServicesProvider
-import com.opencapture.opencine.appkit.MultiviewToolAvailability
-import com.opencapture.opencine.appkit.MultiviewStageVisibility
-import com.opencapture.opencine.appkit.MultiviewNetworkRestore
-import com.opencapture.opencine.appkit.MultiviewStageActions
-import com.opencapture.opencine.appkit.MultiviewStageButton
-import com.opencapture.opencine.appkit.MultiviewTool
-import com.opencapture.opencine.dji.appearsInMultiview
-import com.opencapture.opencine.dji.hasMultiviewPreview
+import com.opencapture.opencine.appkit.MultiviewNetworkSetup
+import com.opencapture.opencine.core.StationNetwork
 import com.opencapture.openpocketcine.AppModel
-import com.opencapture.openpocketcine.LiveDesign
-import com.opencapture.openpocketcine.LiveType
 import com.opencapture.openpocketcine.LiveViewScreen
 import com.opencapture.openpocketcine.feed.LiveFeedEffectsSession
-import com.opencapture.openpocketcine.liveChromeGlass
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
-
-private val StageCanvas = MonitorPalette.backgroundDeep
+import com.opencapture.openpocketcine.pairing.POCKET_STATION_BRAND
+import com.opencapture.openpocketcine.pairing.asStationNetworks
+import com.opencapture.openpocketcine.pairing.lastSSID
+import com.opencapture.openpocketcine.pairing.rememberWifiNameAccess
 
 /**
- * Android Multiview stage. iOS `MultiviewView`: the shared stage (OpenCine appkit) over one
- * persistent tile per camera, the network popup, the camera picker and borrowed Live View.
+ * Android Multiview stage. As iOS `MultiviewView`: OpenCine's shared Multiview screen (stage, Add
+ * list, network wizard, camera settings popup, Live View, prompts) over this session, which hosts
+ * what only Pocket has: one persistent tile picture per camera, the readings, the editors, the
+ * borrowed Live View and the wizard's Wi-Fi values.
  */
 @Composable
 fun MultiviewScreen(model: AppModel, session: MultiviewSession, onClose: () -> Unit) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var adding by remember { mutableStateOf<MultiviewSession.Tile?>(null) }
-    var showNetwork by remember { mutableStateOf(false) }
-    var showLeave by remember { mutableStateOf(false) }
-    var liveTile by remember { mutableStateOf<MultiviewSession.Tile?>(null) }
-    var cameraSettings by remember { mutableStateOf(false) }
-    val close = rememberUpdatedState(onClose)
-
-    fun closeStage() {
-        scope.launch { if (session.closeStage()) close.value() }
-    }
-
     // The stage lives in the model (started by openMultiview, disposed by closeMultiview).
-    LaunchedEffect(session) { showNetwork = !session.networkConfigured }
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    DisposableEffect(lifecycle, session) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_RESUME -> session.setApplicationActive(true)
-                // As iOS: the settings editor stays open; the stage admits no change until the return.
-                Lifecycle.Event.ON_PAUSE -> session.setApplicationActive(false)
-                else -> Unit
-            }
-        }
-        lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer) }
+    DisposableEffect(model, session) {
+        session.appModel = model
+        onDispose { if (session.appModel === model) session.appModel = null }
     }
-    LaunchedEffect(session.layout, session.focusedIndex) { session.persistStage() }
-
-    val borrowed = liveTile?.liveModel
-    if (liveTile != null && borrowed != null) {
-        DisposableEffect(borrowed) {
-            borrowed.multiviewExit = { borrowed.shell.close(); liveTile = null }
-            onDispose { session.closeLiveView() }
-        }
-    }
-
-    BackHandler(enabled = borrowed == null) {
-        when {
-            session.closing -> Unit
-            cameraSettings -> cameraSettings = false
-            showNetwork -> {
-                showNetwork = false
-                if (!session.networkConfigured) closeStage()
-            }
-            adding != null -> {
-                adding = null
-            }
-            session.tiles.any { it.camera != null } -> showLeave = true
-            else -> closeStage()
-        }
-    }
-
-    val overlayOpen = showNetwork || adding != null || session.closing || cameraSettings
-    val haptics = LocalOperatorHaptics.current
-
-    // Drawn over the shell: no touch falls through to the camera home underneath.
-    MultiviewStageVisibility(borrowed == null) {
-    MultiviewStageSurface(session.layout.arrangement, session.focusedIndex,
-        Modifier.fillMaxSize().background(StageCanvas).pointerInput(Unit) { detectTapGestures {} }) { viewport ->
-        val layout = viewport.layout
-        MultiviewStageContent(
-            session, layout, confirmsRecord = model.recordConfirmationEnabled, interactive = !overlayOpen,
-            onAdd = { empty -> if (session.networkConfigured) adding = empty else showNetwork = true },
-            onOpenLive = { tile ->
-                session.openLiveView(tile)
-                if (tile.liveModel != null) liveTile = tile
-            },
-            onSettings = { cameraSettings = true },
-            onNetwork = { showNetwork = true },
-            onExit = { if (session.tiles.any { it.camera != null }) showLeave = true else closeStage() },
-            scope = scope,
-        ) { tile -> if (tile.liveModel == null) TileFeed(session, tile, session.fill) }
-        if (cameraSettings) {
-            MultiviewCameraSettings(session, session.focusedIndex, viewport.width, viewport.height, viewport.safeArea) {
-                cameraSettings = false
-            }
-        }
-        if (session.closing) {
-            Row(
-                Modifier.align(Alignment.Center).liveChromeGlass(RoundedCornerShape(16.dp)).padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                CircularProgressIndicator(Modifier.size(20.dp), color = LiveDesign.text, strokeWidth = 2.dp)
-                Text("Returning cameras to their Wi-Fi…", color = LiveDesign.text, style = LiveType.text(15f))
-            }
-        }
-        if (showNetwork) {
-            MultiviewNetworkSetup(
-                session = session,
-                cameraSsids = model.savedCameras.mapNotNull { it.lastSSID }.toSet(),
-                cancel = {
-                    showNetwork = false
-                    if (!session.networkConfigured) closeStage()
-                },
-                complete = { showNetwork = false },
-            )
-        } else {
-            adding?.let { tile ->
-                val available = session.found.filter { camera ->
-                    camera.appearsInMultiview && session.tiles.none { it.camera?.id == camera.id }
-                }
-                MultiviewCameraPicker(
-                    rows = available.map { camera ->
-                        MultiviewPickerRow(
-                            camera.id, camera.name,
-                            detail = if (camera.hasMultiviewPreview) null
-                            else "Try experimental shared Wi-Fi · Preview unavailable",
-                            limited = !camera.hasMultiviewPreview,
-                        )
-                    },
-                    onCancel = { adding = null },
-                    onPick = { id ->
-                        available.firstOrNull { it.id == id }?.let { camera ->
-                            adding = null
-                            session.enqueueAdd(camera, tile, experimental = !camera.hasMultiviewPreview)
-                        }
-                    },
-                    footer = "Each camera will join ${session.ssid}. Approve on the camera if asked.",
-                    feedback = { haptics.selection() },
-                )
-            }
-        }
-    }
-
-    }
-    if (borrowed != null) {
-        BackHandler { liveTile = null }
-        LiveViewScreen(borrowed)
-    }
-
-    session.error?.let { message ->
-        AlertDialog(
-            onDismissRequest = { session.error = null },
-            title = { Text("Multiview") },
-            text = { Text(message) },
-            confirmButton = { TextButton(onClick = { session.error = null }) { Text("OK") } },
-            dismissButton = if (session.hasPendingCleanup) {
-                { TextButton(onClick = { session.error = null; close.value() }) { Text("Close anyway") } }
-            } else null,
-        )
-    }
-    if (showLeave) {
-        AlertDialog(
-            onDismissRequest = { showLeave = false },
-            text = { Text(MultiviewNetworkRestore.CAMERA_NETWORKS.closeQuestion) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showLeave = false
-                    closeStage()
-                }) { Text(MultiviewNetworkRestore.CLOSE_ACTION) }
-            },
-            dismissButton = { TextButton(onClick = { showLeave = false }) { Text("Cancel") } },
-        )
-    }
+    com.opencapture.opencine.appkit.MultiviewScreen(session.coordinator, session.screenHost, onClose)
 }
 
-/** The shared stage over this session: its values in, its actions out. */
+/** The borrowed Live View over the stage; its own return button and Back go back to the stage. */
 @Composable
-internal fun MultiviewStageContent(
-    session: MultiviewSession,
-    layout: MultiviewPresentationLayout,
-    confirmsRecord: Boolean,
-    interactive: Boolean,
-    onAdd: (MultiviewSession.Tile) -> Unit,
-    onOpenLive: (MultiviewSession.Tile) -> Unit,
-    onSettings: () -> Unit,
-    onNetwork: () -> Unit,
-    onExit: () -> Unit,
-    /** Outlives the stage: Live View replaces it while a record or reconnect is in flight. */
-    scope: CoroutineScope = rememberCoroutineScope(),
-    picture: @Composable (MultiviewSession.Tile) -> Unit,
-) {
-    val haptics = LocalOperatorHaptics.current
-    val assigned = session.tiles.filter { it.camera != null }
-    // Every assigned tile has both working adapters: the settings panel (which opens that tile's
-    // controls once its link is available and says so otherwise) and its own decoder's Auto LUT plan.
-    val assignedSlots = assigned.map { it.index }.toSet()
-    val services = MultiviewStageServices(
-        MultiviewToolAvailability(cameraSettingsSlots = assignedSlots, pictureLUTSlots = assignedSlots),
-        automaticLUT = true,
-    )
-    MultiviewStageStateProvider(session.presentation) {
-    MultiviewStageServicesProvider(services) {
-    MultiviewStage(
-        tiles = session.tiles.indices.map { session.stageTile(it) },
-        layout = layout, arrangement = session.layout.arrangement, selected = session.focusedIndex,
-        fill = session.fill,
-        tools = multiviewTools,
-        readouts = multiviewStageReadouts(session.tiles.getOrNull(session.focusedIndex)?.settings ?: CameraStatus()),
-        recording = session.anyRecording, groupBusy = session.groupRecordingBusy, confirmsRecord = confirmsRecord,
-        actions = MultiviewStageActions(
-            select = { session.focusedIndex = it },
-            arrange = {
-                session.layout = if (it == MultiviewArrangement.GRID) MultiviewLayout.GRID else MultiviewLayout.CENTER_STAGE
-            },
-            setFill = {
-                session.fill = it
-                session.persistStage()
-            },
-            openLiveView = { slot -> session.tiles[slot].takeIf { it.controlHost != null }?.let(onOpenLive) },
-            add = { onAdd(session.tiles[it]) },
-            perform = { action, slot ->
-                val tile = session.tiles[slot]
-                when (action) {
-                    MultiviewCameraAction.LUT -> {
-                        tile.toggleLUT()
-                        session.persistStage()
-                    }
-                    MultiviewCameraAction.RECONNECT -> scope.launch { session.reconnect(tile) }
-                    MultiviewCameraAction.EXPERIMENTAL -> scope.launch { session.tryExperimentalNetwork(tile) }
-                    MultiviewCameraAction.REMOVE -> session.remove(tile)
-                }
-            },
-            close = onExit,
-            recordContext = session::recordContext,
-            record = { plan, slot -> scope.launch { session.record(plan, together = slot == null) } },
-            toggleLut = {
-                val enabled = !assigned.all { it.lutEnabled }
-                assigned.forEach { if (it.lutEnabled != enabled) it.toggleLUT() }
-                session.persistStage()
-            },
-            openSettings = { onSettings() },
-            feedback = { haptics.selection() },
-        ),
-        lut = assigned.any { it.lutEnabled },
-        busy = session.busy, closing = session.closing, interactive = interactive,
-        network = MultiviewStageButton(
-            "Shared Wi-Fi", MonitorIcon.WIFI, enabled = !session.busy && !session.connectingCameras,
-            identifier = "multiview.network", action = onNetwork,
-        ),
-    ) { slot -> picture(session.tiles[slot]) }
+internal fun MultiviewBorrowedLiveView(tile: MultiviewSession.Tile, exit: () -> Unit) {
+    val borrowed = tile.liveModel ?: return
+    val leave by rememberUpdatedState(exit)
+    DisposableEffect(borrowed) {
+        borrowed.multiviewExit = {
+            borrowed.shell.close()
+            leave()
+        }
+        onDispose {}
     }
-    }
+    LiveViewScreen(borrowed)
 }
 
 /** HEVC/AVC → OES → optional Auto LUT → TextureView. Fit/Fill sizes the view, never the decoder. */
 @Composable
-private fun TileFeed(session: MultiviewSession, tile: MultiviewSession.Tile, fill: Boolean) {
+internal fun TileFeed(session: MultiviewSession, tile: MultiviewSession.Tile, fill: Boolean) {
     val context = LocalContext.current
     var gpuFailed by remember { mutableStateOf(false) }
     val handed = remember { arrayOfNulls<Surface>(1) }
@@ -437,31 +174,25 @@ private class TileTextureListener(
 
 // --- Network setup ---------------------------------------------------------------------------------
 
+/** OpenCine's network wizard with Pocket's values: Wi-Fi name access, saved networks and the bound path. */
 @Composable
-private fun MultiviewNetworkSetup(
+internal fun PocketMultiviewNetworkSetup(
     session: MultiviewSession,
-    cameraSsids: Set<String>,
+    lockedNetwork: StationNetwork?,
     cancel: () -> Unit,
     complete: () -> Unit,
 ) {
     val saved = remember { session.savedNetworks().asStationNetworks() }
-    StationNetworkSetup(
+    MultiviewNetworkSetup(
+        coordinator = session.coordinator,
         brand = POCKET_STATION_BRAND,
         wifiNameAccess = rememberWifiNameAccess(),
         savedNetworks = saved,
         currentSsid = session.path::currentSsid,
-        hotspotActive = { session.path.address(true) != null },
-        scan = session::scanNetworks,
-        connect = { network ->
-            session.selectNetworkSource(network.hotspot)
-            session.selectNetwork(network.ssid)
-            session.password = network.password
-            if (session.configureNetwork()) null else session.networkSetupError ?: "Could not connect. Try again."
-        }, cancel = cancel, complete = complete,
-        lockedNetwork = if (session.tiles.any { it.camera != null }) {
-            StationNetwork(session.ssid, "", session.usePhoneHotspot)
-        } else null,
-        warning = session.networkSetupError,
-        cameraSsids = cameraSsids,
+        lockedNetwork = lockedNetwork,
+        cancel = cancel,
+        complete = complete,
+        cameraSsids = session.appModel?.savedCameras?.mapNotNull { it.lastSSID }?.toSet().orEmpty(),
+        sourceChosen = { hotspot -> session.path.hotspot = hotspot },
     )
 }

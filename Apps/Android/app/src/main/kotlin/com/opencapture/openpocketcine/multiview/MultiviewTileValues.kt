@@ -1,14 +1,10 @@
 package com.opencapture.openpocketcine.multiview
 
-import com.opencapture.opencine.appkit.MultiviewCameraAction
 import com.opencapture.opencine.appkit.MultiviewReadout
 import com.opencapture.opencine.appkit.MultiviewRecordContext
 import com.opencapture.opencine.appkit.MultiviewTally
-import com.opencapture.opencine.appkit.MultiviewTile
 import com.opencapture.opencine.appkit.MultiviewTileReadings
 import com.opencapture.opencine.appkit.recordContext
-import com.opencapture.opencine.appkit.tile
-import com.opencapture.opencine.appkit.MultiviewTool
 import com.opencapture.opencine.core.PowerStatus
 import com.opencapture.opencine.cameracontrols.cameraBatteryReadoutLabel
 import com.opencapture.opencine.vocabulary.CameraCommands
@@ -18,9 +14,6 @@ import com.opencapture.opencine.vocabulary.storageReadout
 import com.opencapture.opencine.media.storageReadout
 import com.opencapture.opencine.core.StorageStatus
 import com.opencapture.opencine.vocabulary.VideoResolution
-
-/** The toolbar in iOS order (Pocket iOS `MultiviewStage` tools). */
-internal val multiviewTools = listOf(MultiviewTool.LAYOUT, MultiviewTool.CAMERA, MultiviewTool.FIT, MultiviewTool.LUT)
 
 /** Display values come from the existing throttled tile status; no telemetry polling. */
 internal data class MultiviewTileReadouts(
@@ -85,8 +78,8 @@ internal fun multiviewExposureReadouts(settings: CameraStatus): List<Pair<String
 internal fun multiviewStageReadouts(settings: CameraStatus): List<MultiviewReadout> =
     multiviewExposureReadouts(settings).map { (title, value) -> MultiviewReadout(title, value) }
 
-/** The shared stage's values for one slot, null while it is empty: Pocket's camera readings with the stage's own. */
-internal fun MultiviewSession.stageTile(index: Int): MultiviewTile? {
+/** Pocket's camera readings for one slot, null while it is empty; the shared stage tile adds its own. */
+internal fun MultiviewSession.tileReadings(index: Int): MultiviewTileReadings? {
     val tile = tiles[index]
     val camera = tile.camera ?: return null
     val power = tile.control.current.power
@@ -95,23 +88,12 @@ internal fun MultiviewSession.stageTile(index: Int): MultiviewTile? {
         tile.recordingObservation?.first, tile.recordingBusy, tile.recovering, tile.hasPicture, tile.failureMessage,
         power = power, colorFamily = camera.model.family, storage = tile.control.snapshots.value.storage,
     )
-    val shared = coordinator.tile(
-        index,
-        MultiviewTileReadings(
-            name = camera.name, model = camera.model.name, format = readouts.format, storage = readouts.storage,
-            timecode = tile.timecodeReadout, readouts = multiviewStageReadouts(tile.settings),
-            recordingSeconds = tile.settings.recordElapsedSec.coerceAtLeast(0), power = power,
-            hasPicture = tile.hasPicture,
-        ),
-    ) ?: return null
-    // Compose's status card offers a failure's own buttons (a per-platform look, docs/appkit).
-    val failureActions = setOf(
-        MultiviewCameraAction.EXPERIMENTAL, MultiviewCameraAction.RECONNECT, MultiviewCameraAction.REMOVE,
+    return MultiviewTileReadings(
+        name = camera.name, model = camera.model.name, format = readouts.format, storage = readouts.storage,
+        timecode = tile.timecodeReadout, readouts = multiviewStageReadouts(tile.settings),
+        recordingSeconds = tile.settings.recordElapsedSec.coerceAtLeast(0), power = power,
+        hasPicture = tile.hasPicture,
     )
-    val status = shared.status?.let { status ->
-        if (tile.failureMessage == null) status else status.copy(actions = shared.actions.filter { it.id in failureActions })
-    }
-    return shared.copy(status = status)
 }
 
 /** The record plan for every camera (null) or one slot, with what blocks it now. */
