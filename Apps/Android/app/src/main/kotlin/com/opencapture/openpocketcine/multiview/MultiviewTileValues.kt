@@ -5,10 +5,10 @@ import com.opencapture.opencine.appkit.MultiviewReadout
 import com.opencapture.opencine.appkit.MultiviewRecordContext
 import com.opencapture.opencine.appkit.MultiviewTally
 import com.opencapture.opencine.appkit.MultiviewTile
-import com.opencapture.opencine.appkit.MultiviewTileStatus
+import com.opencapture.opencine.appkit.MultiviewTileReadings
+import com.opencapture.opencine.appkit.recordContext
+import com.opencapture.opencine.appkit.tile
 import com.opencapture.opencine.appkit.MultiviewTool
-import com.opencapture.opencine.appkit.withPower
-import com.opencapture.opencine.dji.hasMultiviewPreview
 import com.opencapture.opencine.core.PowerStatus
 import com.opencapture.opencine.cameracontrols.cameraBatteryReadoutLabel
 import com.opencapture.opencine.vocabulary.CameraCommands
@@ -21,10 +21,6 @@ import com.opencapture.opencine.vocabulary.VideoResolution
 
 /** The toolbar in iOS order (Pocket iOS `MultiviewStage` tools). */
 internal val multiviewTools = listOf(MultiviewTool.LAYOUT, MultiviewTool.CAMERA, MultiviewTool.FIT, MultiviewTool.LUT)
-
-/** The note on the tile itself: iOS keeps the plain recording confirmations off it. */
-internal fun multiviewTileNote(note: String?): String? =
-    note.takeUnless { it == "Recording" || it == "Recording stopped" }
 
 /** Display values come from the existing throttled tile status; no telemetry polling. */
 internal data class MultiviewTileReadouts(
@@ -42,7 +38,7 @@ internal data class MultiviewTileReadouts(
 
 internal fun multiviewTileReadouts(
     index: Int, name: String, model: String, settings: CameraStatus, timecode: String?,
-    recordingObservation: Boolean?, recordingAvailable: Boolean, recordingBusy: Boolean,
+    recordingObservation: Boolean?, recordingBusy: Boolean,
     recovering: Boolean, hasPicture: Boolean, failure: String?,
     power: PowerStatus,
     colorFamily: String = "pocket",
@@ -89,75 +85,34 @@ internal fun multiviewExposureReadouts(settings: CameraStatus): List<Pair<String
 internal fun multiviewStageReadouts(settings: CameraStatus): List<MultiviewReadout> =
     multiviewExposureReadouts(settings).map { (title, value) -> MultiviewReadout(title, value) }
 
-/** Pocket's camera option ids beside the shared Live View id. */
-internal object MultiviewTileAction {
-    const val RECORD = "record"
-    const val LUT = "lut"
-    const val RECONNECT = "reconnect"
-    const val EXPERIMENTAL = "experimental"
-    const val REMOVE = "remove"
-}
-
-/** The shared stage's values for one slot, null while it is empty. */
+/** The shared stage's values for one slot, null while it is empty: Pocket's camera readings with the stage's own. */
 internal fun MultiviewSession.stageTile(index: Int): MultiviewTile? {
     val tile = tiles[index]
     val camera = tile.camera ?: return null
     val power = tile.control.current.power
     val readouts = multiviewTileReadouts(
         index, camera.name, camera.model.name, tile.settings, tile.timecodeReadout,
-        tile.recordingObservation?.first, tile.recordingAvailable,
-        tile.recordingBusy, tile.recovering, tile.hasPicture, tile.failureMessage,
+        tile.recordingObservation?.first, tile.recordingBusy, tile.recovering, tile.hasPicture, tile.failureMessage,
         power = power, colorFamily = camera.model.family, storage = tile.control.snapshots.value.storage,
     )
-    val settled = !busy && !tile.connecting && !tile.recovering
-    val experimental = tile.failureMessage != null && !tile.experimentalNetwork && tile.identity == null
-    val record = recordPlan(tile)
-    return MultiviewTile(
-        name = camera.name, model = camera.model.name, format = readouts.format,
-        storage = readouts.storage, timecode = tile.timecodeReadout,
-        tally = readouts.recording, recording = readouts.isRecording, lut = tile.lutEnabled,
-        note = tile.recordingNote, tileNote = multiviewTileNote(tile.recordingNote),
-        readouts = multiviewStageReadouts(tile.settings),
-        status = readouts.recovery?.let { text ->
-            MultiviewTileStatus(
-                text, detail = tile.failureMessage ?: tile.status,
-                inProgress = tile.failureMessage == null && !tile.networkVerified,
-                actions = if (tile.failureMessage == null) emptyList() else listOfNotNull(
-                    MultiviewCameraAction(MultiviewTileAction.EXPERIMENTAL, "Try experimental shared Wi-Fi", enabled = settled)
-                        .takeIf { experimental },
-                    MultiviewCameraAction(MultiviewTileAction.RECONNECT, "Reconnect", enabled = settled),
-                    MultiviewCameraAction(
-                        MultiviewTileAction.REMOVE, "Remove", MultiviewCameraAction.Kind.DESTRUCTIVE, enabled = settled,
-                    ),
-                ),
-            )
-        },
-        failure = tile.failureMessage,
-        footnote = "Remove this tile to enable Record all for your other cameras."
-            .takeIf { tile.networkVerified && !camera.hasMultiviewPreview },
-        actions = listOfNotNull(
-            MultiviewCameraAction(
-                MultiviewCameraAction.LIVE_VIEW, "Open Live View", enabled = tile.controlHost != null && !tile.connecting,
-            ),
-            MultiviewCameraAction(
-                MultiviewTileAction.RECORD,
-                if (tile.recordingObservation?.first == true) "Stop recording" else "Start recording",
-                MultiviewCameraAction.Kind.RECORD,
-                enabled = record.isExecutable && !groupRecordingBusy && !closing,
-            ),
-            MultiviewCameraAction(MultiviewTileAction.LUT, if (tile.lutEnabled) "Disable Auto LUT" else "Enable Auto LUT"),
-            MultiviewCameraAction(MultiviewTileAction.RECONNECT, "Reconnect", enabled = settled),
-            MultiviewCameraAction(MultiviewTileAction.EXPERIMENTAL, "Try experimental shared Wi-Fi", enabled = settled)
-                .takeIf { experimental },
-            MultiviewCameraAction(
-                MultiviewTileAction.REMOVE, "Remove camera", MultiviewCameraAction.Kind.DESTRUCTIVE,
-                enabled = !busy && !tile.connecting && !groupRecordingBusy && !tile.recordingBusy && !closing,
-            ),
+    val shared = coordinator.tile(
+        index,
+        MultiviewTileReadings(
+            name = camera.name, model = camera.model.name, format = readouts.format, storage = readouts.storage,
+            timecode = tile.timecodeReadout, readouts = multiviewStageReadouts(tile.settings),
+            recordingSeconds = tile.settings.recordElapsedSec.coerceAtLeast(0), power = power,
+            hasPicture = tile.hasPicture,
         ),
-    ).withPower(power)
+    ) ?: return null
+    // Compose's status card offers a failure's own buttons (a per-platform look, docs/appkit).
+    val failureActions = setOf(
+        MultiviewCameraAction.EXPERIMENTAL, MultiviewCameraAction.RECONNECT, MultiviewCameraAction.REMOVE,
+    )
+    val status = shared.status?.let { status ->
+        if (tile.failureMessage == null) status else status.copy(actions = shared.actions.filter { it.id in failureActions })
+    }
+    return shared.copy(status = status)
 }
 
 /** The record plan for every camera (null) or one slot, with what blocks it now. */
-internal fun MultiviewSession.recordContext(slot: Int?): MultiviewRecordContext = MultiviewRecordContext(
-    recordPlan(slot?.let { tiles[it] }), busy = busy || groupRecordingBusy, closing = closing,
-)
+internal fun MultiviewSession.recordContext(slot: Int?): MultiviewRecordContext = coordinator.recordContext(slot)

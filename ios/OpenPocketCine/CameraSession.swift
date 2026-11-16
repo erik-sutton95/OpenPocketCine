@@ -7,6 +7,7 @@ import Observation
 import OpenCineAppKit
 import OpenCineCameraControls
 import class OpenCineApple.CameraHotspotSystem
+import struct OpenCineApple.SharedNetworkStore
 import class OpenCineCore.LocalVPNNotice
 import struct OpenCineCore.SavedCamera
 import struct OpenCineCore.HostClock
@@ -1155,7 +1156,7 @@ final class CameraSession {
         // Registered/subscribed boundary remains synchronous before one initial enable.
         sendInitialLiveViewEnable(displayAttached: decoder.isDisplayReady, pathProven: true)
     }
-    private func connectionRunStationNetwork(ssid: String) -> MultiviewNetworkStore.Network? {
+    private func connectionRunStationNetwork(ssid: String) -> SharedNetworkStore.Network? {
         #if DEBUG
             if let peers = connectionNativePeers { return peers.stationNetwork }
         #endif

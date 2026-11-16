@@ -203,29 +203,28 @@ class MultiviewControlSessionTest {
         }
     }
 
-    @Test fun backgroundRetiresPendingSettingsWhileKeepingTheFourFeedOwners() {
+    /** iOS's rule: the editor stays open in the background, and no change reaches the camera until the return. */
+    @Test fun backgroundKeepsTheEditorAndTheFourFeedOwnersButSendsNothing() {
         lateinit var stage: MultiviewSession
         lateinit var controls: AppModel
         var commandAt = 0L
         main {
             stage = MultiviewSession(instrumentation.targetContext, saveStage = { true })
             // Enter the already-connected stage state without discovery, provisioning, or sockets.
-            MultiviewSession::class.java.getDeclaredField("running").apply { isAccessible = true }.setBoolean(stage, true)
             val tile = stage.tiles[0]
             tile.camera = FoundCamera("first", "unused", "First", CameraModel("Osmo Pocket 4"), null)
             tile.driver = endpoint()
             tile.controlHost = "unused"
+            tile.recordingAvailable = true // fresh record state, as the stage's 1 s monitor reports it
             controls = assertNotNull(tile.openControls { stage.controlsAvailable(tile) })
-            controls.session.setIsoIndex(4)
-            controls.session.setIsoIndex(5)
-            assertEquals(2, controls.session.pendingCameraSetCount)
-            commandAt = tile.lastCommandAt
             val decoder = tile.decoder
             val driver = tile.driver
             stage.setApplicationActive(false)
-            assertNull(tile.controlsModel)
-            assertEquals(0, controls.session.pendingCameraSetCount)
+            assertSame(controls, tile.controlsModel, "the editor stays open, as on iOS")
             assertFalse(stage.controlsAvailable(tile))
+            commandAt = tile.lastCommandAt
+            controls.session.setIsoIndex(4)
+            assertEquals(0, controls.session.pendingCameraSetCount, "no change is admitted while away")
             assertSame(decoder, tile.decoder)
             assertSame(driver, tile.driver)
             assertFalse(assertNotNull(driver).isClosed)
@@ -237,9 +236,9 @@ class MultiviewControlSessionTest {
                 assertEquals(commandAt, stage.tiles[0].lastCommandAt)
                 stage.setApplicationActive(true)
                 assertTrue(stage.controlsAvailable(stage.tiles[0]))
-                assertNull(stage.tiles[0].controlsModel)
-                controls.session.setIsoIndex(6)
-                assertEquals(0, controls.session.pendingCameraSetCount)
+                assertSame(controls, stage.tiles[0].controlsModel)
+                controls.session.setIsoIndex(5)
+                assertEquals(1, controls.session.pendingCameraSetCount, "the same editor admits changes again")
             }
         } finally { main { stage.dispose() } }
     }

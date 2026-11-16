@@ -1,10 +1,14 @@
 import Foundation
 import OpenCineAppKit
+import OpenCineDJI
 import OpenCineDJIApple
 import OpenPocketViewCore
 import XCTest
 
 @testable import OpenPocketCine
+
+/// This app's four slots, as the stage journal validates against them.
+private let tileCount = MultiviewQualificationPolicy.tileCount
 
 final class MultiviewStagePersistenceTests: XCTestCase {
     @MainActor func testCommonPresentationSurvivesRelaunchWithoutRestoringNetworkOrCameraSlots()
@@ -14,7 +18,7 @@ final class MultiviewStagePersistenceTests: XCTestCase {
         let storage = try XCTUnwrap(UserDefaults(suiteName: domain))
         defer { storage.removePersistentDomain(forName: domain) }
         let store = MultiviewStagePreferencesStore(storage: storage, key: "presentation")
-        let legacy = MultiviewStageStore.Stage(
+        let legacy = MultiviewStageJournal.Stage(
             ssid: "Previous network", hotspot: true, layout: MultiviewLayout.grid.rawValue,
             focusedIndex: 2, cameras: [], pendingReset: [], returnedToCameraWiFi: true, fill: true)
         let first = MultiviewSession(saveStage: { _ in true })
@@ -38,7 +42,7 @@ final class MultiviewStagePersistenceTests: XCTestCase {
     }
 
     @MainActor func testSavedHotspotStageCannotSkipSessionNetworkChoiceOrRestoreCameraLocks() {
-        let camera = MultiviewStageStore.Camera(
+        let camera = MultiviewStageJournal.Camera(
             slot: 0, id: UUID(), name: "OsmoPocket3-Test", modelId: 0x20,
             identity: nil, address: "", experimental: false, lutEnabled: false)
         let session = MultiviewSession(
@@ -109,10 +113,10 @@ final class MultiviewStagePersistenceTests: XCTestCase {
     }
 
     @MainActor func testLegacyAssignedCamerasBecomeCleanupOnlyWithoutSelectingTheirNetwork() {
-        let camera = MultiviewStageStore.Camera(
+        let camera = MultiviewStageJournal.Camera(
             slot: 0, id: UUID(), name: "OsmoPocket3-Test", modelId: 0x20,
             identity: nil, address: "", experimental: false, lutEnabled: false)
-        var journal: MultiviewStageStore.Stage?
+        var journal: MultiviewStageJournal.Stage?
         let session = MultiviewSession(saveStage: {
             journal = $0
             return true
@@ -131,7 +135,7 @@ final class MultiviewStagePersistenceTests: XCTestCase {
     }
 
     @MainActor func testCancellingNewSetupDoesNotDeleteLastPresentationPreferences() async {
-        var journal: MultiviewStageStore.Stage? = .init(
+        var journal: MultiviewStageJournal.Stage? = .init(
             ssid: "Previous network", hotspot: true, layout: MultiviewLayout.grid.rawValue,
             focusedIndex: 2, cameras: [], pendingReset: [], returnedToCameraWiFi: true, fill: true)
         let session = MultiviewSession(saveStage: {
@@ -150,17 +154,17 @@ final class MultiviewStagePersistenceTests: XCTestCase {
     }
 
     func testStageRoundTripPreservesSlotsIdentityAndOperatorChoices() throws {
-        let camera = MultiviewStageStore.Camera(
+        let camera = MultiviewStageJournal.Camera(
             slot: 2, id: UUID(), name: "OsmoPocket3-Test",
             modelId: nil, identity: [0, 4, 84, 101, 115, 116], address: "192.168.1.20",
             experimental: true, lutEnabled: true)
-        let stage = MultiviewStageStore.Stage(
+        let stage = MultiviewStageJournal.Stage(
             ssid: "Test network", hotspot: false,
             layout: MultiviewLayout.grid.rawValue, focusedIndex: 2, cameras: [camera],
             pendingReset: [camera], returnedToCameraWiFi: false, fill: true)
         let data = try JSONEncoder().encode(stage)
-        let decoded = try JSONDecoder().decode(MultiviewStageStore.Stage.self, from: data)
-        XCTAssertEqual(decoded.validated, stage)
+        let decoded = try JSONDecoder().decode(MultiviewStageJournal.Stage.self, from: data)
+        XCTAssertEqual(decoded.validated(tileCount: tileCount), stage)
         XCTAssertFalse(String(decoding: data, as: UTF8.self).contains("password"))
         XCTAssertTrue(
             CameraModel.resolve(
@@ -169,58 +173,62 @@ final class MultiviewStagePersistenceTests: XCTestCase {
             ).isPocket3)
     }
     func testLegacyStageWithoutFitFillStillRestores() throws {
-        let stage = MultiviewStageStore.Stage(
+        let stage = MultiviewStageJournal.Stage(
             ssid: "Test", hotspot: false,
             layout: MultiviewLayout.centerStage.rawValue, focusedIndex: 0, cameras: [])
         let data = try JSONEncoder().encode(stage)
         XCTAssertFalse(String(decoding: data, as: UTF8.self).contains("fill"))
-        let restored = try JSONDecoder().decode(MultiviewStageStore.Stage.self, from: data)
-        XCTAssertNotNil(restored.validated)
+        let restored = try JSONDecoder().decode(MultiviewStageJournal.Stage.self, from: data)
+        XCTAssertNotNil(restored.validated(tileCount: tileCount))
         XCTAssertNil(restored.fill)
     }
 
     func testInvalidStageCannotAssignDuplicateCamerasOrInvalidSlots() {
-        let camera = MultiviewStageStore.Camera(
+        let camera = MultiviewStageJournal.Camera(
             slot: 0, id: UUID(), name: "OsmoNano-Test",
             modelId: 0x19, identity: nil, address: "", experimental: false, lutEnabled: false)
-        var stage = MultiviewStageStore.Stage(
+        var stage = MultiviewStageJournal.Stage(
             ssid: "Test", hotspot: true,
             layout: "Center stage", focusedIndex: 0, cameras: [camera])
-        XCTAssertNotNil(stage.validated)
+        XCTAssertNotNil(stage.validated(tileCount: tileCount))
         stage.cameras.append(camera)
-        XCTAssertNil(stage.validated)
+        XCTAssertNil(stage.validated(tileCount: tileCount))
         stage.cameras = [camera]
         stage.cameras[0].slot = 4
-        XCTAssertNil(stage.validated)
+        XCTAssertNil(stage.validated(tileCount: tileCount))
         stage.cameras = [camera]
         stage.version = 99
-        XCTAssertNil(stage.validated)
+        XCTAssertNil(stage.validated(tileCount: tileCount))
     }
 
     func testCleanupOnlyJournalDoesNotRequireNetworkOrTileSlots() throws {
         let cameras = (0..<6).map { index in
-            MultiviewStageStore.Camera(
+            MultiviewStageJournal.Camera(
                 slot: 0, id: UUID(), name: "Scan camera \(index)", modelId: nil,
                 identity: nil, address: "", experimental: false, lutEnabled: false)
         }
-        var stage = MultiviewStageStore.Stage(
+        var stage = MultiviewStageJournal.Stage(
             ssid: "", hotspot: false, layout: "Grid", focusedIndex: 0, cameras: [],
             pendingReset: cameras)
-        XCTAssertNotNil(stage.validated, "Cleanup targets are independent of the four tile slots")
+        XCTAssertNotNil(
+            stage.validated(tileCount: tileCount),
+            "Cleanup targets are independent of the four tile slots")
         let restored = try JSONDecoder().decode(
-            MultiviewStageStore.Stage.self, from: JSONEncoder().encode(stage))
-        XCTAssertEqual(restored.validated, stage)
+            MultiviewStageJournal.Stage.self, from: JSONEncoder().encode(stage))
+        XCTAssertEqual(restored.validated(tileCount: tileCount), stage)
         stage.cameras = [cameras[0]]
-        XCTAssertNil(stage.validated, "An assigned stage still requires a network")
+        XCTAssertNil(
+            stage.validated(tileCount: tileCount), "An assigned stage still requires a network")
         stage.cameras = []
         stage.pendingReset = cameras + [cameras[0]]
-        XCTAssertNil(stage.validated, "A camera must only be reset once")
+        XCTAssertNil(stage.validated(tileCount: tileCount), "A camera must only be reset once")
         stage.pendingReset = []
-        XCTAssertNil(stage.validated, "Completed cleanup journals must be deleted")
+        XCTAssertNil(
+            stage.validated(tileCount: tileCount), "Completed cleanup journals must be deleted")
     }
 
     func testCleanupUnionPreservesUnassignedCamerasAndDeduplicatesByIdentity() {
-        let scanned = MultiviewStageStore.Camera(
+        let scanned = MultiviewStageJournal.Camera(
             slot: 0, id: UUID(), name: "Scan camera", modelId: nil,
             identity: nil, address: "", experimental: false, lutEnabled: false)
         var assigned = scanned
@@ -228,12 +236,12 @@ final class MultiviewStagePersistenceTests: XCTestCase {
         assigned.address = "192.168.1.20"
         var other = scanned
         other.id = UUID()
-        let combined = MultiviewStageStore.cleanupTargets([scanned, other], including: [assigned])
+        let combined = MultiviewStageJournal.cleanupTargets([scanned, other], including: [assigned])
         XCTAssertEqual(combined, [assigned, other])
     }
 
     @MainActor func testScanOnlyCleanupSurvivesFailureAndSecondCloseRetries() async throws {
-        var journal: MultiviewStageStore.Stage?
+        var journal: MultiviewStageJournal.Stage?
         var attempts = 0
         let session = MultiviewSession(
             resetCamera: { _ in
@@ -251,7 +259,7 @@ final class MultiviewStagePersistenceTests: XCTestCase {
         XCTAssertEqual(journal?.ssid, "")
         XCTAssertEqual(journal?.cameras, [])
         XCTAssertEqual(journal?.pendingReset?.map(\.id), [camera.id])
-        XCTAssertNotNil(journal?.validated)
+        XCTAssertNotNil(journal?.validated(tileCount: tileCount))
         let firstClose = await session.closeStage()
         XCTAssertFalse(firstClose)
         XCTAssertEqual(attempts, 1)
@@ -265,7 +273,7 @@ final class MultiviewStagePersistenceTests: XCTestCase {
     }
 
     @MainActor func testFirstCloseRetriesCapturedPairingReplyForOnlyUnfinishedCamera() async {
-        var journal: MultiviewStageStore.Stage?
+        var journal: MultiviewStageJournal.Stage?
         var attempts: [UUID: Int] = [:]
         var waits = 0
         let first = DjiAppleSighting(
@@ -303,11 +311,11 @@ final class MultiviewStagePersistenceTests: XCTestCase {
 
     @MainActor func testRepeatedPairingDeferralIsBoundedAndKeepsCleanupJournal() async {
         var attempts = 0
-        var journal: MultiviewStageStore.Stage?
+        var journal: MultiviewStageJournal.Stage?
         let session = MultiviewSession(
             resetCamera: { _ in
                 attempts += 1
-                throw MultiviewSession.Failure.pairingDeferred
+                throw MultiviewFailure.pairingDeferred
             }, resetRetryDelay: {},
             saveStage: {
                 journal = $0
@@ -325,7 +333,7 @@ final class MultiviewStagePersistenceTests: XCTestCase {
     }
 
     @MainActor func testCloseReusesUncancelledScanCleanup() async throws {
-        var journal: MultiviewStageStore.Stage?
+        var journal: MultiviewStageJournal.Stage?
         var attempts = 0
         var finish: CheckedContinuation<Bool, Never>?
         let session = MultiviewSession(
@@ -364,10 +372,10 @@ final class MultiviewStagePersistenceTests: XCTestCase {
     }
 
     @MainActor private func checkCleanupRestoreWithoutNetwork(ssid: String) async {
-        let camera = MultiviewStageStore.Camera(
+        let camera = MultiviewStageJournal.Camera(
             slot: 0, id: UUID(), name: "Scan camera", modelId: nil,
             identity: nil, address: "", experimental: false, lutEnabled: false)
-        var journal: MultiviewStageStore.Stage? = .init(
+        var journal: MultiviewStageJournal.Stage? = .init(
             ssid: ssid, hotspot: false, layout: "Grid", focusedIndex: 0, cameras: [],
             pendingReset: [camera])
         var restored: [UUID] = []

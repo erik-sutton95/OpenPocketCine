@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import OpenCineApple
 import OpenCineDJIApple
 
 /// DEBUG-only SIMULATED OS/native dependencies. The actual shared connection owner executes
@@ -14,7 +15,7 @@ struct ConnectionNativePeers {
     var registered: (any DjiAppleConnectionEndpoint, DjiAppleConnectionRun.Attempt) -> Void
     var ssid: String?
     var password: String?
-    var stationNetwork: MultiviewNetworkStore.Network?
+    var stationNetwork: SharedNetworkStore.Network?
     var persist: (String, String) -> Void
     var forget: () -> Void
     var removeNetwork: (String) -> Void = { _ in }
