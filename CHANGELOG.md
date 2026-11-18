@@ -11,6 +11,22 @@ All notable changes to this project are documented here. The format is based on
 - Pocket 4 Pro: digital zoom now reaches 18x (DJI's November 2026 firmware). On older firmware the
   camera stops at 12x and the zoom readout shows 12x (#645).
 
+### Added
+
+- The monitor's lock button also holds the screen rotation, upside-down landscape
+  included, so a phone mounted inverted no longer flips when it is levelled (discussion #564).
+
+### Fixed
+
+- iOS AirPods head tracking no longer drives the gimbal in FPV or Direction Lock, where it
+  jumped the gimbal toward its limit; Calibrate asks for Follow or Tilt locked instead.
+- When the gimbal is past the head tracking range, head tracking stops and says so instead
+  of freezing silently while it re-sent gimbal setup about ten times a second.
+- Diagnostics record the head tracking targets sent to the gimbal, with the gimbal mode and
+  attitude layout, to help diagnose tilt near level.
+- With subject tracking on, a frozen picture starts its first repair after about 2 s instead
+  of about 6 s: the tracking poll no longer counts as a camera setting change.
+
 ## [0.1.8] - 2026-10-30
 
 Public beta, cumulative since open beta build 128 (0.1.5). The operator-facing iOS and
