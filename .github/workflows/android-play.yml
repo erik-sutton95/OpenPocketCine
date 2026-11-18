@@ -62,7 +62,9 @@ jobs:
     # The notes check below counts only tester uploads, so the job name carries the audience.
     name: ${{ (github.event.inputs.track || 'internal') == 'internal' && 'Bundle and upload (internal)' || 'Bundle and upload (testers)' }}
     if: ${{ github.repository == 'erik-sutton95/OpenPocketCine' && (github.event_name == 'workflow_dispatch' || vars.ANDROID_PLAY_UPLOAD == 'true') }}
-    runs-on: ubuntu-latest
+    # scripts/ci-install-swift-android.sh installs the Ubuntu 24.04 Swift toolchain, whose
+    # swift-sdk needs libxml2.so.2; ubuntu-latest (26.04) no longer ships it.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     environment: play-closed
     env:
