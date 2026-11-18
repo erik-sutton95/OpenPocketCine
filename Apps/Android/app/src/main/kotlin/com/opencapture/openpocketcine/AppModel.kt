@@ -175,6 +175,8 @@ class AppModel(
             }
         }
     }
+    /** The connected camera's exposure and white balance presets (Settings, Controls tab). */
+    val cameraPresets = com.opencapture.opencine.appkit.CameraSettingsPresetsModel(OperatorPrefs.cameraPresets(appContext), shell)
     var shellState by mutableStateOf(shell.state.value)
         private set
     init { scope.launch { shell.state.collect { shellState = it } } }

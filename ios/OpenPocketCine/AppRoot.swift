@@ -29,6 +29,9 @@ final class AppModel {
     let cameras: CamerasModel
     let control = MonitorControlModel()
     let shell: ShellModel
+    /// The connected camera's exposure and white balance presets (Settings, Controls tab), kept
+    /// beside the saved cameras.
+    let cameraPresets: CameraSettingsPresetsModel
     @ObservationIgnored let integration: DJIIntegration
     #if DEBUG && targetEnvironment(simulator)
         @ObservationIgnored var simulatedControlReview: MonitorReviewControlPort?
@@ -68,6 +71,7 @@ final class AppModel {
                 ] : [],
             store: Self.camerasStore(defaults))
         shell = ShellModel(cameras: cameras, control: control)
+        cameraPresets = CameraSettingsPresetsModel(store: CameraSettingsPresetStore(storage: defaults), shell: shell)
         // The save rules a DJI record follows: another camera's network is never saved with
         // this one, and a setup that moves the camera is remembered before it moves it.
         integration.savedCameras = { [weak self] in self?.cameras.saved ?? [] }

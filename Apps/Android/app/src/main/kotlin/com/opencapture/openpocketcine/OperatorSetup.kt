@@ -86,6 +86,7 @@ internal fun operatorSetupApp(model: AppModel) = OperatorSetupApp(
         val shell by model.shell.state.collectAsState()
         key(shell.monitor?.id) { com.opencapture.opencine.cameracontrols.monitorSettingsCacheSource(model.mediaController().library, model.mediaCacheRoot) }
     },
+    cameraPresets = model.cameraPresets,
 )
 
 @Composable
