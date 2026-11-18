@@ -36,9 +36,9 @@ import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.opencine.vocabulary.CameraModel
 import com.opencapture.opencine.vocabulary.CameraStatus
 import com.opencapture.opencine.vocabulary.FoundCamera
-import com.opencapture.openpocketcine.multiview.MultiviewCameraSettings
+import com.opencapture.opencine.appkit.MultiviewCameraSettingsPanel
 import com.opencapture.openpocketcine.multiview.MultiviewSession
-import com.opencapture.openpocketcine.multiview.MultiviewStageContent
+import com.opencapture.opencine.appkit.MultiviewStageContent
 import com.opencapture.opencine.appkit.MultiviewCameraAction as MultiviewStageAction
 import com.opencapture.opencine.appkit.MultiviewReadout
 import com.opencapture.opencine.appkit.MultiviewRecordContext
@@ -175,7 +175,7 @@ class MultiviewTileChromeTest {
                                         val screen = it.positionOnScreen()
                                         origin.set(screen.x, screen.y)
                                     }) {
-                                        MultiviewStageContent(stage, layout, confirmsRecord = false, interactive = true,
+                                        MultiviewStageContent(stage.coordinator, stage.screenHost, layout, interactive = true,
                                             onAdd = {}, onOpenLive = {}, onSettings = { settingsOpened = true },
                                             onNetwork = {}, onExit = {}) {}
                                     }
@@ -255,8 +255,6 @@ class MultiviewTileChromeTest {
             try {
                 scenario.onActivity { activity ->
                     stage = MultiviewSession(activity, saveStage = { true })
-                    MultiviewSession::class.java.getDeclaredField("running").apply { isAccessible = true }
-                        .setBoolean(stage, true)
                     repeat(2) { index ->
                         val tile = stage.tiles[index]
                         tile.camera = FoundCamera("camera-$index", "unused", "Camera $index", CameraModel("Osmo Pocket 4"), null)
@@ -267,6 +265,7 @@ class MultiviewTileChromeTest {
                             override fun cameraLocalIPv4(): String? = null
                         }, 9004, false, "osmo")
                         tile.controlHost = "unused"
+                        tile.recordingAvailable = true // fresh record state, as the stage's monitor reports it
                         tile.latestSettings = CameraStatus(shootingMode = CameraCommands.SHOOT_VIDEO,
                             isoIndex = 3, isoLimit = 6, expoMode = CameraCommands.EXPO_MANUAL, availableIsoIndices = listOf(3, 4, 5))
                     }
@@ -291,7 +290,7 @@ class MultiviewTileChromeTest {
                                         android.graphics.RectF(origin.left + viewport.width - panelWidth, origin.top + panelY,
                                             origin.left + viewport.width, origin.top + panelY + panelHeight).roundOut(expectedPanel)
                                     }.testTag("multiview.settingsViewport")) {
-                                        MultiviewCameraSettings(stage, 0, width, height,
+                                        MultiviewCameraSettingsPanel(stage.coordinator, stage.screenHost, 0, width, height,
                                             MultiviewSafeArea(top = 24f, bottom = 20f)) {}
                                     }
                                 }
@@ -344,7 +343,7 @@ class MultiviewTileChromeTest {
                     assertEquals(0, first.session.pendingCameraSetCount)
                     assertEquals(0, stage.focusedIndex)
                     assertEquals(4, stage.tiles.size)
-                    stage.tiles[1].reset()
+                    assertTrue(stage.remove(stage.tiles[1]))
                 }
                 awaitCondition { stage.tiles[0].controlsModel != null }
                 awaitNode("A · Camera 0")

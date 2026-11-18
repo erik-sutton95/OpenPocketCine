@@ -130,7 +130,7 @@ import OpenCineDJIApple
         let blocked = session.tiles[2]
         blocked.recordingAvailable = false  // its record report went stale
         let strict = session.recordPlan()
-        XCTAssertEqual(MultiviewSession.recordPolicy, .strict)
+        XCTAssertEqual(RecordAll.policy, .strict)
         XCTAssertTrue(strict.isRefused)
         XCTAssertEqual(
             strict.exclusions,

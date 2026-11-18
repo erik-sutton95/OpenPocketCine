@@ -255,8 +255,12 @@ session, and no additional decoder or preview-enable path is created.
 Per-camera options remain available inside every occupied tile, including the
 smaller portrait feeds. One tap selects without changing the arrangement.
 Clean hides the upper session controls and assist palette while retaining DISP
-to restore them. Per-tile recovery, recording acknowledgement and station-network cleanup
-remain in `MultiviewSession`. Its current shared assist control applies Auto LUT
+to restore them. Adding, discovery, Reconnect, Remove, the per-tile repair
+guards and rejoin budget, record on all cameras and station-network cleanup
+are OpenCine's `MultiviewCoordinator`; `MultiviewSession` adapts it (each tile
+is the coordinator's `MultiviewMemberLink` and forwards its state to a
+`MultiviewMember`, the session is its `MultiviewHost`) and keeps the DJI link,
+its watchdog ladder and the record wire. Its current shared assist control applies Auto LUT
 through the existing per-camera LUT operation, enabled by default for newly
 added cameras. Tile batteries and HH:MM:SS timecode reuse Live View presentation.
 Camera options use bounded floating monitor components. Camera settings opens
@@ -272,8 +276,13 @@ handoff. Fixed section headers align the columns through scan state changes;
 Connect and manual network entry stay in the bottom safe/keyboard-adjusted footer. The entry points inject their connection owners. Android Multiview
 uses the equivalent shell form, `StationNetworkSetup`, with injected scan and
 connect actions. Saved-camera setup chips and Add setup use the shared flow on both platforms.
-`MultiviewProvisioner` owns a bounded camera scan and returns the camera to its
-access point on the same BLE link, including cancellation. Multiview journals a
+Multiview reaches DJI's camera setup, the phone's shared-network path and each tile's
+link through OpenCine's seams (`StationCommissioner`, `StationHostPath`,
+`MultiviewMemberLink`, plus DJI's `MultiviewCameraPolicy` for which bodies may join and show a
+picture; the tiles are the DJI member link). A tile's link reports its status through the seam;
+the session maps it to the tile's copy and owns the tile's control host. OpenCine's DJI provisioner
+(`DjiAppleMultiviewProvisioner`, Android `MultiviewProvisioner`) owns a bounded camera scan
+and returns the camera to its access point on the same BLE link, including cancellation. Multiview journals a
 cleanup obligation immediately before the station setter, removes it only on a
 confirmed return and waits for the scan before stage shutdown. No network form
 owns a live decoder, watchdog or preview-enable path.

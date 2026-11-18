@@ -44,6 +44,7 @@ class MultiviewMulticamTest {
         )
         val sent = mutableListOf<Boolean>()
         var reply: Pair<Boolean, Long>? = null
+        var note: String? = null
         val port = MultiviewTileControl(
             state = { state },
             send = { start ->
@@ -52,6 +53,7 @@ class MultiviewMulticamTest {
             },
             reply = { since -> reply?.takeIf { it.second >= since }?.first },
             setBusy = { state = state.copy(recordingBusy = it) },
+            setNote = { note = it },
             scope = scope,
             clock = clock,
         ).apply { confirmationWindowMs = 1_000 }
@@ -140,6 +142,7 @@ class MultiviewMulticamTest {
         advanceTimeBy(150)
         runCurrent()
         assertTrue(tiles.all { it.state.recordingBusy })
+        assertTrue(tiles.all { it.note == RecordAll.WAITING }, "each camera shows its wait at send, as on iOS")
         val now = testScheduler.currentTime
         // a ACKs then reports recording; b only reports; c stays silent; d NACKs.
         a.reply = true to now

@@ -2,7 +2,7 @@ package com.opencapture.openpocketcine
 
 import com.opencapture.opencine.dji.CMD_PARAM
 import com.opencapture.opencine.dji.DjiNative
-import com.opencapture.opencine.cameracontrols.LiveSheet
+import com.opencapture.opencine.appkit.MultiviewSettingsCategory
 import com.opencapture.opencine.core.SupportStatus
 import android.os.SystemClock
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -46,17 +46,17 @@ class MultiviewControlSessionTest {
                 val originalCommandAt = tile.lastCommandAt
                 assertEquals(SupportStatus.SUPPORTED, editor.controlCapabilities().audio.support)
                 assertEquals(editor.controlCapabilities(), sheet.controlCapabilities)
-                assertTrue(LiveSheet.AUDIO in multiviewSettingsCategories(camera.model, video, editor.controlCapabilities()))
-                assertFalse(LiveSheet.AUDIO in multiviewSettingsCategories(camera.model,
+                assertTrue(MultiviewSettingsCategory.AUDIO in multiviewSettingsCategories(camera.model, video, editor.controlCapabilities()))
+                assertFalse(MultiviewSettingsCategory.AUDIO in multiviewSettingsCategories(camera.model,
                     video.copy(shootingMode = CameraCommands.SHOOT_PHOTO), editor.controlCapabilities()))
                 // The tile still has its last identity while the borrowed session loses its body.
                 // A saved category list must not invent AUDIO for the now-unknown control model.
                 editor.session.updateMultiview(null, tile.driver, video)
                 assertEquals(SupportStatus.UNKNOWN, editor.controlCapabilities().audio.support)
                 assertEquals(SupportStatus.UNKNOWN, sheet.controlCapabilities.audio.support)
-                assertFalse(LiveSheet.AUDIO in multiviewSettingsCategories(camera.model, video, editor.controlCapabilities()))
+                assertFalse(MultiviewSettingsCategory.AUDIO in multiviewSettingsCategories(camera.model, video, editor.controlCapabilities()))
                 editor.session.updateMultiview(camera, tile.driver, video)
-                assertTrue(LiveSheet.AUDIO in multiviewSettingsCategories(camera.model, video, editor.controlCapabilities()))
+                assertTrue(MultiviewSettingsCategory.AUDIO in multiviewSettingsCategories(camera.model, video, editor.controlCapabilities()))
                 assertEquals(0, editor.session.pendingCameraSetCount)
                 assertEquals(originalCommandAt, tile.lastCommandAt, "Reading admission sends no command")
             } finally {
@@ -203,29 +203,28 @@ class MultiviewControlSessionTest {
         }
     }
 
-    @Test fun backgroundRetiresPendingSettingsWhileKeepingTheFourFeedOwners() {
+    /** iOS's rule: the editor stays open in the background, and no change reaches the camera until the return. */
+    @Test fun backgroundKeepsTheEditorAndTheFourFeedOwnersButSendsNothing() {
         lateinit var stage: MultiviewSession
         lateinit var controls: AppModel
         var commandAt = 0L
         main {
             stage = MultiviewSession(instrumentation.targetContext, saveStage = { true })
             // Enter the already-connected stage state without discovery, provisioning, or sockets.
-            MultiviewSession::class.java.getDeclaredField("running").apply { isAccessible = true }.setBoolean(stage, true)
             val tile = stage.tiles[0]
             tile.camera = FoundCamera("first", "unused", "First", CameraModel("Osmo Pocket 4"), null)
             tile.driver = endpoint()
             tile.controlHost = "unused"
+            tile.recordingAvailable = true // fresh record state, as the stage's 1 s monitor reports it
             controls = assertNotNull(tile.openControls { stage.controlsAvailable(tile) })
-            controls.session.setIsoIndex(4)
-            controls.session.setIsoIndex(5)
-            assertEquals(2, controls.session.pendingCameraSetCount)
-            commandAt = tile.lastCommandAt
             val decoder = tile.decoder
             val driver = tile.driver
             stage.setApplicationActive(false)
-            assertNull(tile.controlsModel)
-            assertEquals(0, controls.session.pendingCameraSetCount)
+            assertSame(controls, tile.controlsModel, "the editor stays open, as on iOS")
             assertFalse(stage.controlsAvailable(tile))
+            commandAt = tile.lastCommandAt
+            controls.session.setIsoIndex(4)
+            assertEquals(0, controls.session.pendingCameraSetCount, "no change is admitted while away")
             assertSame(decoder, tile.decoder)
             assertSame(driver, tile.driver)
             assertFalse(assertNotNull(driver).isClosed)
@@ -237,9 +236,9 @@ class MultiviewControlSessionTest {
                 assertEquals(commandAt, stage.tiles[0].lastCommandAt)
                 stage.setApplicationActive(true)
                 assertTrue(stage.controlsAvailable(stage.tiles[0]))
-                assertNull(stage.tiles[0].controlsModel)
-                controls.session.setIsoIndex(6)
-                assertEquals(0, controls.session.pendingCameraSetCount)
+                assertSame(controls, stage.tiles[0].controlsModel)
+                controls.session.setIsoIndex(5)
+                assertEquals(1, controls.session.pendingCameraSetCount, "the same editor admits changes again")
             }
         } finally { main { stage.dispose() } }
     }

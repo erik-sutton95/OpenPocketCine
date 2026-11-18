@@ -1,8 +1,10 @@
 package com.opencapture.openpocketcine.multiview
 
+import com.opencapture.opencine.appkit.MultiviewTile
 import com.opencapture.opencine.core.CameraTimecode
 import com.opencapture.opencine.core.PowerStatus
 import com.opencapture.opencine.dji.DjiCameraSessionAdapter
+import com.opencapture.opencine.vocabulary.CameraCommands
 import com.opencapture.opencine.vocabulary.CameraModel
 import com.opencapture.opencine.vocabulary.CameraStatus
 import com.opencapture.opencine.core.ObservedValue
@@ -19,17 +21,17 @@ import kotlin.test.assertTrue
 
 class MultiviewTileReadoutsTest {
     @Test fun unknownTelemetryNeverLooksLikeStandbyOrFullStorage() {
-        val readouts = readouts(CameraStatus(), observed = null, available = false)
+        val readouts = readouts(CameraStatus(), observed = null)
         assertEquals("—", readouts.timecode)
         assertEquals("—", readouts.battery)
         assertEquals("—", readouts.storage)
-        assertEquals("REC —", readouts.recording)
+        assertEquals("\u2014", readouts.recording)
         assertFalse(readouts.isRecording)
         assertTrue(multiviewExposureReadouts(CameraStatus()).all { it.second == "—" })
     }
 
     @Test fun reportedZeroBatteryAndFullCardRemainKnownValues() {
-        val readouts = readouts(CameraStatus(sdTotalMb = 1024, sdFreeMb = 0), false, true, power = percent(0.0))
+        val readouts = readouts(CameraStatus(sdTotalMb = 1024, sdFreeMb = 0), false, power = percent(0.0))
         assertEquals("0%", readouts.battery)
         assertEquals("0 B", readouts.storage)
         assertEquals("STBY", readouts.recording)
@@ -37,7 +39,7 @@ class MultiviewTileReadoutsTest {
 
     @Test fun sharedStorageCaseReadsSixtyGigabytes() {
         // A5-11: 60e9 free of 128e9 bytes on the aggregate store, as the DJI wire carries them (MiB).
-        val readouts = readouts(CameraStatus(storageFreeMb = 57_220, storageTotalMb = 122_070), false, true)
+        val readouts = readouts(CameraStatus(storageFreeMb = 57_220, storageTotalMb = 122_070), false)
         assertEquals("60 GB", readouts.storage)
     }
 
@@ -47,25 +49,44 @@ class MultiviewTileReadoutsTest {
             freeBytes = ObservedValue(bytes, ObservationOrigin.CAMERA_REPORTED, null),
             totalBytes = ObservedValue(2000L, ObservationOrigin.CAMERA_REPORTED, null))),
             ObservationOrigin.CAMERA_REPORTED, null)
-        assertEquals("1 KB", readouts(legacy, false, true, storage(1001)).storage)
-        assertEquals("0 B", readouts(legacy, false, true, storage(0)).storage)
+        assertEquals("1 KB", readouts(legacy, false, storage(1001)).storage)
+        assertEquals("0 B", readouts(legacy, false, storage(0)).storage)
         val unknown: StorageStatus = ObservedValue.unknown
-        assertEquals(StorageReadout.UNAVAILABLE, readouts(legacy, false, true, unknown).storage)
+        assertEquals(StorageReadout.UNAVAILABLE, readouts(legacy, false, unknown).storage)
     }
 
     @Test fun eachCameraKeepsItsOwnTimecodeAndRecordingConfirmation() {
-        val one = readouts(CameraStatus(recordElapsedSec = 84), true, true, timecode = "01:02:03")
-        val two = readouts(CameraStatus(), false, true, timecode = "10:20:30")
+        val one = readouts(CameraStatus(recordElapsedSec = 84), true, timecode = "01:02:03")
+        val two = readouts(CameraStatus(), false, timecode = "10:20:30")
         assertEquals("01:02:03", one.timecode)
-        assertEquals("REC 1:24", one.recording)
+        assertEquals("REC 01:24", one.recording)
         assertEquals("10:20:30", two.timecode)
         assertEquals("STBY", two.recording)
-        val stale = readouts(CameraStatus(recordElapsedSec = 84), true, false)
-        assertEquals("REC —", stale.recording)
+        val stale = readouts(CameraStatus(recordElapsedSec = 84), true)
+        assertEquals("REC 01:24", stale.recording)
+    }
+
+    @Test fun tallyAndFormatMatchIOS() {
+        assertEquals("REC 01:05", readouts(CameraStatus(recordElapsedSec = 65), true).recording)
+        assertEquals("STBY", readouts(CameraStatus(), false).recording)
+        assertEquals("\u2014", readouts(CameraStatus(), null).recording)
+        assertEquals("WAIT", readouts(CameraStatus(), false, busy = true).recording)
+        assertEquals("HOLD", readouts(CameraStatus(), false, recovering = true).recording)
+        assertEquals("CHECK", readouts(CameraStatus(), false, failure = "lost").recording)
+        assertEquals("4K 25p \u00b7 D-Log M", readouts(CameraStatus(resolutionCode = CameraCommands.RES_4K, fps = 25, colorMode = CameraCommands.COLOR_DLOG_M), false).format)
+    }
+
+    @Test fun recordNoteReachesTheTileExceptPlainConfirmations() {
+        // The shared rule (OpenCine `MultiviewTile.tileNote`, keyed off RecordAll's confirmations).
+        assertEquals("Camera rejected the record command", MultiviewTile.tileNote("Camera rejected the record command"))
+        assertEquals("No confirmation from camera", MultiviewTile.tileNote("No confirmation from camera"))
+        assertNull(MultiviewTile.tileNote("Recording"))
+        assertNull(MultiviewTile.tileNote("Recording stopped"))
+        assertNull(MultiviewTile.tileNote(null))
     }
 
     @Test fun compactReadoutsRetainIdentityAndUnknownFields() {
-        val readouts = readouts(CameraStatus(storageTotalMb = 16384, storageFreeMb = 8192), false, true, power = percent(0.73))
+        val readouts = readouts(CameraStatus(storageTotalMb = 16384, storageFreeMb = 8192), false, power = percent(0.73))
         assertEquals("B", readouts.letter)
         assertEquals("Side angle", readouts.name)
         assertEquals("Osmo Pocket 4", readouts.model)
@@ -76,7 +97,7 @@ class MultiviewTileReadoutsTest {
     @Test fun commonPowerOverridesRetainedLegacyBatteryWithoutInventingUnknown() {
         val status = CameraStatus(batteryPercent = 99)
         fun actual(power: com.opencapture.opencine.core.PowerStatus) = multiviewTileReadouts(
-            1, "SIMULATED", "SIMULATED", status, null, false, true,
+            1, "SIMULATED", "SIMULATED", status, null, false,
             false, false, true, null, power = power)
         val gauge = com.opencapture.opencine.core.PowerStatus(battery = com.opencapture.opencine.core.ObservedValue(
             0.25, com.opencapture.opencine.core.ObservationOrigin.CAMERA_REPORTED, null,
@@ -94,7 +115,7 @@ class MultiviewTileReadoutsTest {
             CameraModel(name = "Osmo Nano", family = "nano", verified = true))) {
             var state = TileRecordState(model = model)
             val control = DjiCameraSessionAdapter(MultiviewTileControl(
-                state = { state }, send = { true }, reply = { null }, setBusy = {},
+                state = { state }, send = { true }, reply = { null }, setBusy = {}, setNote = {},
                 scope = backgroundScope, clock = { 0L }), backgroundScope)
             assertNull(control.tileTimecodeReadout())
             state = state.copy(timecode = CameraTimecode(1, 2, 3, 4))
@@ -105,9 +126,10 @@ class MultiviewTileReadoutsTest {
     private fun percent(value: Double) = PowerStatus(battery = ObservedValue(value, ObservationOrigin.CAMERA_REPORTED, null))
 
     /** [timecode] is the tile's clock as the shared status formats it (`MultiviewSession.Tile.timecodeReadout`). */
-    private fun readouts(settings: CameraStatus, observed: Boolean?, available: Boolean, storage: StorageStatus? = null,
-        timecode: String? = null, power: PowerStatus = PowerStatus.unknown) = multiviewTileReadouts(
-        1, "Side angle", "Osmo Pocket 4", settings, timecode, observed, available,
-        recordingBusy = false, recovering = false, hasPicture = true, failure = null, power = power, storage = storage,
+    private fun readouts(settings: CameraStatus, observed: Boolean?, storage: StorageStatus? = null,
+        timecode: String? = null, power: PowerStatus = PowerStatus.unknown,
+        busy: Boolean = false, recovering: Boolean = false, failure: String? = null) = multiviewTileReadouts(
+        1, "Side angle", "Osmo Pocket 4", settings, timecode, observed,
+        recordingBusy = busy, recovering = recovering, hasPicture = true, failure = failure, power = power, storage = storage,
     )
 }
