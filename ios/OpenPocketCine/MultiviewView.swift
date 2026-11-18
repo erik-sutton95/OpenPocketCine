@@ -3,6 +3,7 @@ import AVFoundation
 import MonitorPresentation
 import MonitorUI
 import OpenCineAppKit
+import OpenCineCameraControls
 import OpenPocketViewCore
 import SwiftUI
 import OpenCineDJIApple
@@ -13,31 +14,25 @@ private final class MultiviewSessionOwner {
     private var retained: MultiviewSession?
     private var make: (() -> MultiviewSession)?
     init(make: @escaping () -> MultiviewSession) { self.make = make }
-    var session: MultiviewSession {
+    /// The session, created once; it reads the app's preferences and saved cameras from `model`.
+    func session(_ model: AppModel) -> MultiviewSession {
         if let retained { return retained }
         guard let make else { preconditionFailure("Missing retained Multiview constructor") }
         let created = make()
+        created.appModel = model
         retained = created
         self.make = nil
         return created
     }
 }
 
+/// Pocket's Multiview: OpenCine's shared screen (`MultiviewScreen`) over this app's session, which
+/// is the screen's host (pictures, backdrop, settings editor, Live View, network wizard values).
 struct MultiviewView: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.scenePhase) private var scenePhase
     @State private var owner: MultiviewSessionOwner
-    private var session: MultiviewSession { owner.session }
     private let startsSession: Bool
     private let reviewPictures: Bool
-    @State private var adding: MultiviewSession.Tile?
-    @State private var showNetwork = false
-    @State private var selectedCamera: DjiAppleSighting?
-    @State private var showLeave = false
-    @State private var liveTile: MultiviewSession.Tile?
-    @State private var settingsTile: MultiviewSession.Tile?
-    @State private var stageGeometry = MultiviewStageGeometry()
 
     init(session: MultiviewSession? = nil, startsSession: Bool = true, reviewPictures: Bool = false,
         makeSession: @escaping @MainActor () -> MultiviewSession = { MultiviewSession() })
@@ -65,185 +60,134 @@ struct MultiviewView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            MultiviewStageSurface(
-                arrangement: session.presentation.layout.arrangement, selected: session.focusedIndex
-            ) { viewport in
-                stageContent(viewport: viewport)
-                    .toolbar(.hidden, for: .navigationBar)
-                    .statusBarHidden(true)
+        let session = owner.session(model)
+        MultiviewScreen(coordinator: session.coordinator, host: session, startsSession: startsSession)
+            .environment(\.multiviewReviewPictures, reviewPictures)
+    }
+}
 
-                    .allowsHitTesting(!showNetwork && adding == nil && !session.closing)
-                    .overlay {
-                        if session.closing {
-                            ProgressView("Returning cameras to their Wi-Fi…").padding().background(
-                                .ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-                        }
-                    }
-                    .accessibilityHidden(showNetwork || adding != nil)
-                    .overlay {
-                        if let tile = adding {
-                            cameraPicker(tile)
-                        }
-                    }
-                    .fullScreenCover(item: $liveTile, onDismiss: { session.closeLiveView() }) {
-                        tile in
-                        if let model = tile.liveModel {
-                            LiveViewScreen().environment(model)
-                                .onAppear {
-                                    model.multiviewExit = {
-                                        model.shell.close()
-                                        liveTile = nil
-                                    }
-                                }
-                        }
-                    }
-                    .alert(
-                        "Multiview",
-                        isPresented: Binding(
-                            get: { session.error != nil }, set: { if !$0 { session.error = nil } })
-                    ) {
-                        Button("OK") { session.error = nil }
-                        if session.hasPendingCleanup {
-                            Button("Close anyway") { dismiss() }
-                        }
-                    } message: {
-                        Text(session.error ?? "")
-                    }
-                    .confirmationDialog(
-                        MultiviewNetworkRestore.cameraNetworks.closeQuestion,
-                        isPresented: $showLeave, titleVisibility: .visible
-                    ) {
-                        Button(MultiviewNetworkRestore.closeAction) {
-                            Task { if await session.closeStage() { dismiss() } }
-                        }
-                    }
-                    .onChange(of: scenePhase) { _, phase in
-                        if startsSession { session.setApplicationActive(phase == .active) }
-                    }
-                    .onReceive(
-                        NotificationCenter.default.publisher(
-                            for: UIApplication.willResignActiveNotification)
-                    ) { _ in
-                        if startsSession { session.setApplicationActive(false) }
-                    }
-                    .onReceive(
-                        NotificationCenter.default.publisher(
-                            for: UIApplication.didBecomeActiveNotification)
-                    ) { _ in
-                        if startsSession { session.setApplicationActive(true) }
-                    }
-                    .onChange(of: session.layout) { _, _ in session.persistStage() }
-                    .onChange(of: session.focusedIndex) { _, _ in session.persistStage() }
-                    .onAppear {
-                        if startsSession { session.start() }
-                        showNetwork = !session.networkConfigured
-                    }
-            }
-            .ignoresSafeArea(.container)
+extension EnvironmentValues {
+    /// The DEBUG review fixture draws static artwork over each tile's picture.
+    @Entry var multiviewReviewPictures = false
+}
+
+/// The shared screen's app half: this session's pictures, backdrop, settings editor, borrowed
+/// Live View and network wizard values.
+extension MultiviewSession: MultiviewScreenHost {
+    var confirmsRecord: Bool { appModel?.recordConfirmationEnabled ?? true }
+    var editsCameraSettings: Bool { true }
+    var appliesAutoLUT: Bool { true }
+
+    func lutChanged(slot: Int) { tiles[slot].updateLUT() }
+
+    func openCameraSettings(slot: Int) { openCameraSettings(tiles[slot]) }
+
+    func cameraSettings(slot: Int) -> MultiviewCameraSettingsState? {
+        guard let model = tiles[slot].controlsModel else { return nil }
+        return MultiviewCameraSettingsState(
+            categories: MultiviewSettingsCategory.offered(
+                focus: model.session.supportsFocusMode, aperture: model.session.supportsAperture,
+                photo: model.session.status.isPhoto, audio: true),
+            recording: model.session.status.isRecording, note: model.session.controlNote)
+    }
+
+    /// The tile's own datalink is open and no Live View borrows it.
+    func admitsControls(slot: Int) -> Bool {
+        tiles[slot].driver != nil && tiles[slot].liveModel == nil
+    }
+
+    func picture(slot: Int, fill: Bool) -> some View {
+        MultiviewTilePicture(
+            tile: tiles[slot], index: slot, fill: fill,
+            hdrDisplay: appModel?.hdrDisplayActive ?? false)
+    }
+
+    func backdrop(
+        layout: MultiviewPresentationLayout, geometry: MultiviewStageGeometry, enabled: Bool
+    ) -> some ViewModifier {
+        MultiviewBackdrop(session: self, layout: layout, geometry: geometry, enabled: enabled)
+    }
+
+    @ViewBuilder func settingsPreview(slot: Int) -> some View {
+        let tile = tiles[slot]
+        if let model = tile.controlsModel {
+            // Live View's assist inspector preview, fed by this tile's sample bus.
+            AssistInspectorPreview(tool: .lut, pictureEffects: tile.settingsPreviewEffects)
+                .environment(model)
+                .id(ObjectIdentifier(model))
         }
-        .interactiveDismissDisabled()
-        .sheet(isPresented: $showNetwork) {
-            MultiviewNetworkSetup(
-                session: session,
-                cancel: {
-                    showNetwork = false
-                    Task { if await session.closeStage() { dismiss() } }
-                }, complete: { showNetwork = false }
+    }
+
+    @ViewBuilder func settingsControls(
+        slot: Int, category: MultiviewSettingsCategory, enabled: Bool,
+        presented: @escaping () -> Bool, close: @escaping () -> Void
+    ) -> some View {
+        let tile = tiles[slot]
+        if let model = tile.controlsModel, let sheet = CaptureSheet(rawValue: category.rawValue) {
+            CapturePickerPanel(
+                sheet: sheet,
+                isPresented: { tile.controlsModel === model && presented() },
+                controlsEnabled: enabled, chromeless: true, onClose: close
             )
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-            .presentationBackground(MonitorTheme.background)
-            .interactiveDismissDisabled()
+            .fixedSize(horizontal: false, vertical: true)
+            .environment(model)
+            .id(
+                MultiviewSettingsPanelIdentity(
+                    model: ObjectIdentifier(model), category: sheet,
+                    described: model.control.snapshot != nil))
         }
     }
 
-    private func stageContent(viewport: MultiviewStageViewport) -> some View {
-        let safe = viewport.safeArea
-        let layout = viewport.layout
-        let program = session.tiles[min(3, max(0, session.focusedIndex))]
-        return MultiviewStage(
-            tiles: session.tiles.indices.map(session.stageTile), layout: layout,
-            viewport: viewport.size, safeArea: safe,
-            arrangement: Binding(
-                get: { session.layout == .grid ? .grid : .centerStage },
-                set: { session.layout = $0 == .grid ? .grid : .centerStage }),
-            selected: Binding(get: { session.focusedIndex }, set: { session.focusedIndex = $0 }),
-            fill: Binding(
-                get: { session.feedAspect == .fill },
-                set: {
-                    session.feedAspect = $0 ? .fill : .fit16x9
-                    session.persistStage()
-                }),
-            tools: [.layout, .camera, .fit, .lut],
-            readouts: program.camera == nil
-                ? nil : MultiviewTelemetryPresentation(
-                    settings: program.settings, power: program.control.current.power).readouts,
-            lut: session.tiles.contains { $0.camera != nil && $0.lutEnabled },
-            recording: session.anyRecording, busy: session.busy,
-            groupBusy: session.groupRecordingBusy,
-            confirmsRecord: model.recordConfirmationEnabled,
-            network: MultiviewStageButton(
-                title: "Shared Wi-Fi", value: session.ssid, icon: .wifi,
-                enabled: !(session.busy || session.connectingCameras || !startsSession),
-                identifier: "multiview.network"
-            ) { showNetwork = true },
-            geometry: stageGeometry,
-            actions: MultiviewStageActions(
-                openLiveView: openLiveView, add: add, perform: perform, toggleLUT: toggleLUT,
-                openSettings: { settingsTile = session.tiles[$0] }, close: close,
-                recordContext: session.recordContext(slot:),
-                record: { plan, slot in await session.record(plan, together: slot == nil) },
-                popupsClosed: closePopups),
-            picture: picture,
-            backdrop: MultiviewBackdrop(
-                session: session, layout: layout, geometry: stageGeometry,
-                enabled: liveTile == nil && !showNetwork && adding == nil && !session.closing)
-        )
-        .multiviewStageState(session.presentation)
-        .multiviewStageServices(toolServices)
-        .multiviewStageVisible(liveTile == nil)
-        .overlay { settingsPanel(viewport: viewport.size, safe: safe) }
-    }
-
-    /// Every assigned tile has both working adapters: the per-tile settings panel (which opens
-    /// that tile's controls once its link is available and says so otherwise) and its own
-    /// decoder's Auto LUT render plan.
-    private var toolServices: MultiviewStageServices {
-        let assigned = Set(session.tiles.indices.filter { session.tiles[$0].camera != nil })
-        return MultiviewStageServices(
-            availability: MultiviewToolAvailability(
-                cameraSettingsSlots: assigned, pictureLUTSlots: assigned),
-            automaticLUT: true)
-    }
-
-    private func closePopups() {
-        settingsTile = nil
-        session.closeCameraSettings()
-    }
-
-    @ViewBuilder
-    private func settingsPanel(viewport: CGSize, safe: EdgeInsets) -> some View {
-        if let tile = settingsTile {
-            // Same trailing side panel as Live View's gimbal controls.
-            MultiviewCameraSettings(
-                session: session, initialTile: tile, viewport: viewport, safeArea: safe,
-                close: closePopups
-            )
-            .accessibilityAddTraits(.isModal)
-            .preferredColorScheme(.dark)
+    @ViewBuilder func liveView(slot: Int, exit: @escaping () -> Void) -> some View {
+        if let model = tiles[slot].liveModel {
+            LiveViewScreen().environment(model)
+                .onAppear {
+                    model.multiviewExit = {
+                        model.shell.close()
+                        exit()
+                    }
+                }
         }
     }
 
-    @ViewBuilder
-    private func picture(_ index: Int) -> some View {
-        let tile = session.tiles[index]
+    var stationBrand: StationNetworkBrand { PocketStationNetwork.brand }
+    var stationServices: StationNetworkServices { PocketStationNetwork.services }
+    var cameraSSIDs: Set<String> { Set(appModel?.savedCameras.compactMap(\.lastSSID) ?? []) }
+
+    /// The physical probe's preview value, DEBUG only (Release sets none, as before).
+    func settingsAccessibilityValue(slot: Int?) -> String? {
+        #if DEBUG
+            ProcessInfo.processInfo.environment["OPV_PHYSICAL_MULTIVIEW_PROBE"] == "1"
+                ? slot.map { tiles[$0].previewAccessibilityValue } ?? "" : ""
+        #else
+            nil
+        #endif
+    }
+}
+
+/// The settings controls start again for another camera, category or a camera's first description.
+private struct MultiviewSettingsPanelIdentity: Hashable {
+    let model: ObjectIdentifier
+    let category: CaptureSheet
+    /// The panel captures its field on appear; it appears again once the freshly bound
+    /// controls first describe the camera.
+    let described: Bool
+}
+
+/// One tile's picture: its decoder's display layer, Fit or Fill, while no Live View borrows it.
+private struct MultiviewTilePicture: View {
+    let tile: MultiviewSession.Tile
+    let index: Int
+    let fill: Bool
+    let hdrDisplay: Bool
+    @Environment(\.multiviewReviewPictures) private var reviewPictures
+
+    var body: some View {
         ZStack {
             if tile.liveModel == nil {
                 GeometryReader { picture in
-                    let fill = session.feedAspect == .fill
                     let ratio = tile.decoder.pictureAspect
-                    MultiviewVideoLayer(tile: tile, hdrDisplay: model.hdrDisplayActive)
+                    MultiviewVideoLayer(tile: tile, hdrDisplay: hdrDisplay)
                         .frame(
                             width: fill
                                 ? max(picture.size.width, picture.size.height * ratio)
@@ -257,86 +201,11 @@ struct MultiviewView: View {
             }
             #if DEBUG
                 if reviewPictures {
-                    MultiviewUIReviewPicture(index: index, fill: session.feedAspect == .fill)
+                    MultiviewUIReviewPicture(index: index, fill: fill)
                 }
             #endif
         }
     }
-
-    private func toggleLUT() {
-        let enabled = !session.tiles.filter { $0.camera != nil }.allSatisfy(\.lutEnabled)
-        for tile in session.tiles where tile.camera != nil && tile.lutEnabled != enabled {
-            tile.toggleLUT()
-        }
-        session.persistStage()
-    }
-
-    private func add(_ slot: Int) {
-        selectedCamera = nil
-        if session.networkConfigured { adding = session.tiles[slot] } else { showNetwork = true }
-    }
-
-    private func perform(_ action: String, _ slot: Int) {
-        let tile = session.tiles[slot]
-        switch action {
-        case MultiviewTileAction.lut:
-            tile.toggleLUT()
-            session.persistStage()
-        case MultiviewTileAction.reconnect: Task { await session.reconnect(tile) }
-        case MultiviewTileAction.experimental: Task { await session.tryExperimentalNetwork(tile) }
-        // A removed camera's options close with it.
-        case MultiviewTileAction.remove: Task { _ = await session.remove(tile) }
-        default: break
-        }
-    }
-
-    private func openLiveView(_ slot: Int) {
-        let tile = session.tiles[slot]
-        guard tile.controlHost != nil, !tile.recovering else { return }
-        session.openLiveView(tile)
-        if tile.liveModel != nil { liveTile = tile }
-    }
-
-    private func close() {
-        if session.tiles.contains(where: { $0.camera != nil }) {
-            showLeave = true
-        } else {
-            Task { if await session.closeStage() { dismiss() } }
-        }
-    }
-
-    private var availableCameras: [DjiAppleSighting] {
-        session.found.filter { camera in
-            camera.appearsInMultiview
-                && !session.tiles.contains { $0.camera?.id == camera.id }
-        }
-    }
-
-    private func cameraPicker(_ tile: MultiviewSession.Tile) -> some View {
-        let cameras = availableCameras
-        return MultiviewCameraPicker(
-            rows: cameras.map { camera in
-                MultiviewPickerRow(
-                    id: camera.id.uuidString, title: camera.name,
-                    detail: camera.hasMultiviewPreview
-                        ? nil : "Try experimental shared Wi-Fi · Preview unavailable",
-                    limited: !camera.hasMultiviewPreview)
-            },
-            footer: "Each camera will join \(session.ssid). Approve on the camera if asked.",
-            cancel: {
-                adding = nil
-                selectedCamera = nil
-            }
-        ) { id in
-            guard let camera = cameras.first(where: { $0.id.uuidString == id }) else { return }
-            adding = nil
-            Task {
-                session.enqueueAdd(
-                    camera, to: tile, experimental: !camera.hasMultiviewPreview)
-            }
-        }
-    }
-
 }
 
 /// The stage's video backdrop: every live tile's picture, placed where the stage canvas put it.

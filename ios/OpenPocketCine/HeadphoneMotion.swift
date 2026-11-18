@@ -29,6 +29,8 @@ extension AppModel: HeadTrackHost {
         session.gimbal.updateNativeHeadTrack(target: target, token: token)
     }
     func endNativeHeadTrack(token: UInt64) { session.gimbal.endNativeHeadTrack(token: token) }
+    /// FPV, Direction Lock or a pose past the reach: tracking stops with the note.
+    var headTrackStop: HeadTrackStop? { session.gimbal.headTrackStop }
 }
 
 extension HeadphoneMotionBridge {
