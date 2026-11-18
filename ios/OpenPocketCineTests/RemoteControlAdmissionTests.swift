@@ -143,6 +143,27 @@ final class RemoteControlAdmissionTests: XCTestCase {
         XCTAssertEqual(writes.first(where: { $0.cmdId == 0x7F })?.payload, [0xA5])
     }
 
+    /// SIMULATED OpenPocketCine#639: reads go out on the real command path without arming the
+    /// post-SET grace, so a stall during tracking reaches its first repair on the normal schedule.
+    func testReadsDoNotArmSetGraceAndWritesDo() async throws {
+        let peer = try WatchAckingCamera()
+        let driver = DjiAppleDatalink.loopbackForTesting(port: try await peer.start())
+        defer {
+            driver.close()
+            peer.stop()
+            retainWireTrace(peer, name: "set-grace")
+        }
+        try await driver.open()
+        let admission = DJICommandAdmission(owner: driver.commandOwner, isCurrent: { true })
+        guard case .queued = driver.send(Commands.pollTracking(), admission: admission) else {
+            return XCTFail("The real native port must admit the SIMULATED tracking poll")
+        }
+        XCTAssertNotEqual(driver.send(Commands.paramGet(.isoLimit)), 0)
+        XCTAssertNil(driver.secondsSinceLastCommand, "A read must not start the post-SET grace")
+        XCTAssertNotEqual(driver.send(Commands.setIsoLimit(.max800)), 0)
+        XCTAssertNotNil(driver.secondsSinceLastCommand, "A write must start the post-SET grace")
+    }
+
     private func retainWireTrace(_ peer: WatchAckingCamera, name: String) {
         let trace = "[WATCH-CASE] \(name)\n" + peer.wireTrace.joined(separator: "\n")
         let attachment = XCTAttachment(string: trace)
