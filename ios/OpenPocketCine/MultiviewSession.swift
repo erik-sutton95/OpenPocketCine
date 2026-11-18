@@ -359,6 +359,9 @@ final class MultiviewSession {
     /// host: the tiles' pictures, Live View, editors and background time are Pocket's.
     @ObservationIgnored let coordinator: MultiviewCoordinator<Tile>
     @ObservationIgnored private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+    /// The app's model, for the record confirmation preference, the HDR display and the saved
+    /// cameras' networks the screen reads; set once when the screen creates the session.
+    @ObservationIgnored weak var appModel: AppModel?
 
     var found: [DjiAppleSighting] { coordinator.found }
     var busy: Bool {

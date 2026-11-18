@@ -2,7 +2,7 @@ package com.opencapture.openpocketcine
 
 import com.opencapture.opencine.dji.CMD_PARAM
 import com.opencapture.opencine.dji.DjiNative
-import com.opencapture.opencine.cameracontrols.LiveSheet
+import com.opencapture.opencine.appkit.MultiviewSettingsCategory
 import com.opencapture.opencine.core.SupportStatus
 import android.os.SystemClock
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -46,17 +46,17 @@ class MultiviewControlSessionTest {
                 val originalCommandAt = tile.lastCommandAt
                 assertEquals(SupportStatus.SUPPORTED, editor.controlCapabilities().audio.support)
                 assertEquals(editor.controlCapabilities(), sheet.controlCapabilities)
-                assertTrue(LiveSheet.AUDIO in multiviewSettingsCategories(camera.model, video, editor.controlCapabilities()))
-                assertFalse(LiveSheet.AUDIO in multiviewSettingsCategories(camera.model,
+                assertTrue(MultiviewSettingsCategory.AUDIO in multiviewSettingsCategories(camera.model, video, editor.controlCapabilities()))
+                assertFalse(MultiviewSettingsCategory.AUDIO in multiviewSettingsCategories(camera.model,
                     video.copy(shootingMode = CameraCommands.SHOOT_PHOTO), editor.controlCapabilities()))
                 // The tile still has its last identity while the borrowed session loses its body.
                 // A saved category list must not invent AUDIO for the now-unknown control model.
                 editor.session.updateMultiview(null, tile.driver, video)
                 assertEquals(SupportStatus.UNKNOWN, editor.controlCapabilities().audio.support)
                 assertEquals(SupportStatus.UNKNOWN, sheet.controlCapabilities.audio.support)
-                assertFalse(LiveSheet.AUDIO in multiviewSettingsCategories(camera.model, video, editor.controlCapabilities()))
+                assertFalse(MultiviewSettingsCategory.AUDIO in multiviewSettingsCategories(camera.model, video, editor.controlCapabilities()))
                 editor.session.updateMultiview(camera, tile.driver, video)
-                assertTrue(LiveSheet.AUDIO in multiviewSettingsCategories(camera.model, video, editor.controlCapabilities()))
+                assertTrue(MultiviewSettingsCategory.AUDIO in multiviewSettingsCategories(camera.model, video, editor.controlCapabilities()))
                 assertEquals(0, editor.session.pendingCameraSetCount)
                 assertEquals(originalCommandAt, tile.lastCommandAt, "Reading admission sends no command")
             } finally {

@@ -78,22 +78,23 @@ struct MultiviewTelemetryPresentation {
 }
 
 extension MultiviewSession {
-    /// The shared stage's values for one slot, `nil` while it is empty: Pocket's camera readings
-    /// with the tally, notes, status and options the stage owns.
-    func stageTile(_ index: Int) -> MultiviewTile? {
+    /// Pocket's camera readings for one slot's tile, `nil` while it is empty; the shared stage adds
+    /// the tally, notes, status and options (`MultiviewCoordinator.stageTile`).
+    func readings(slot index: Int) -> MultiviewTileReadings? {
         let tile = tiles[index]
         guard let camera = tile.camera else { return nil }
         let power = tile.control.current.power
         let values = MultiviewTelemetryPresentation(
             settings: tile.settings, power: power, storageObservation: tile.control.current.storage)
-        return coordinator.tile(
-            index,
-            MultiviewTileReadings(
-                name: camera.name, model: camera.model.name, format: values.format,
-                storage: values.storage, timecode: tile.timecodeReadout, readouts: values.readouts,
-                recordingSeconds: tile.settings.recordElapsedSec, power: power,
-                hasPicture: tile.hasPicture, accessibilityValue: tile.previewAccessibilityValue))
+        return MultiviewTileReadings(
+            name: camera.name, model: camera.model.name, format: values.format,
+            storage: values.storage, timecode: tile.timecodeReadout, readouts: values.readouts,
+            recordingSeconds: tile.settings.recordElapsedSec, power: power,
+            hasPicture: tile.hasPicture, accessibilityValue: tile.previewAccessibilityValue)
     }
+
+    /// The shared stage's values for one slot, `nil` while it is empty.
+    func stageTile(_ index: Int) -> MultiviewTile? { coordinator.stageTile(index) }
 
     /// The record plan for every camera (`nil`) or one slot, with what blocks it now.
     func recordContext(slot: Int?) -> MultiviewRecordContext {
