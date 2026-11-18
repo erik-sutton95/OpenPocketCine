@@ -100,8 +100,9 @@ The View Assist palette collapses into the lower-left control area. Expand it fo
 full catalog; tap a tool to toggle it or hold to open its options inspector.
 Playback uses that same live-view slot.
 Image previews use the raw feed and work with all scopes off.
-On Pocket 4 Pro, tap zoom to alternate 1× and 3×; double tap for 6× and 12×
-when digital zoom is available. Other cameras retain their supported zoom stops.
+On Pocket 4 Pro, tap zoom to alternate 1× and 3×; double tap for 6×, 12× and 18×
+when digital zoom is available (18× needs DJI's November 2026 firmware; older
+firmware stops at 12× and the chip shows 12×). Other cameras retain their supported zoom stops.
 Hold the zoom value for a continuous dial. The disc hub reads hundredths (1.53×)
 and the chip still shows tenths. Dragging retains finer values without snapping
 to those displayed numbers or whole zoom stops. Its limits and recording restrictions
@@ -323,7 +324,7 @@ space after rotation or resizing, including saved positions. Long-press a View A
   imported Custom looks remain available. Returning to Video restores the
   saved conversion unless you changed your LUT selection. Opening a recorded
   clip still uses that clip's color profile.
-- Camera writes (record, ISO, EV, zoom and gimbal on Pocket). Current zoom chips are (Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×; Pocket 3 1×/2×/4×
+- Camera writes (record, ISO, EV, zoom and gimbal on Pocket). Current zoom chips are (Pocket 4 Pro 1×/3×/6×/12×/18×; Pocket 4 1×/2×/4×; Pocket 3 1×/2×/4×
   with 4K max 2×). Nano is a fixed 1× lens: no zoom chip, pinch, disc or
   controller zoom, and no gimbal stick or tap focus. Pocket 3's ceiling is per-FORMAT, not one
   generic 4×: **1080 4×, 2.7K 3×, 2160 1:1 3×, 4K 2×, 3K 1:1 2×**

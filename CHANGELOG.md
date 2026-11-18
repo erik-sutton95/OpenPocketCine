@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- Pocket 4 Pro: digital zoom now reaches 18x (DJI's November 2026 firmware). On older firmware the
+  camera stops at 12x and the zoom readout shows 12x (#645).
+
 ## [0.1.8] - 2026-10-30
 
 Public beta, cumulative since open beta build 128 (0.1.5). The operator-facing iOS and
