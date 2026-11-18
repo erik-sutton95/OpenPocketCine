@@ -1,4 +1,5 @@
 import MonitorPresentation
+import OpenCineAppKit
 import OpenCineCore
 import OpenPocketViewCore
 import MonitorUI
@@ -103,6 +104,8 @@ import XCTest
             rows[tab] = rendered.rows
         }
         XCTAssertTrue(["Record confirmation", "Haptics", "Keep screen awake"].allSatisfy { rows[.controls]?.contains($0) == true })
+        // The camera presets card leads the Controls tab.
+        XCTAssertEqual(rows[.controls]?.first, CameraSettingsPresetCopy.title, "\(rows[.controls] ?? [])")
         XCTAssertTrue(rows[.display]?.contains("HDR display") == true, "\(rows[.display] ?? [])")
         XCTAssertTrue(rows[.storage]?.contains("Full Resolution Caching") == true, "\(rows[.storage] ?? [])")
         XCTAssertTrue(rows[.system]?.contains("Automatic error reports") == true, "\(rows[.system] ?? [])")

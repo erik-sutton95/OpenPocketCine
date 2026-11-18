@@ -6,6 +6,7 @@ import androidx.core.content.edit
 import com.opencapture.opencine.cameracontrols.OperatorPreferenceStore
 import com.opencapture.opencine.runtime.MonitorGlesUpscaler
 import com.opencapture.monitorui.settings.MonitorSettingsTab
+import com.opencapture.opencine.appkit.CameraSettingsPresetStore
 import com.opencapture.opencine.appkit.MonitorDisplaySection
 import com.opencapture.opencine.appkit.MonitorDisplayChrome
 import com.opencapture.opencine.appkit.MonitorDisplayMode
@@ -25,4 +26,7 @@ object OperatorPrefs : OperatorPreferenceStore(
         prefs(context).edit { putString(FEED_UPSCALER, value.label) }
         AppDiagnostics.reporting.noteFeedUpscaler(value.label)
     }
+
+    /** Saved exposure and white balance presets, in this preferences file. */
+    fun cameraPresets(context: Context) = CameraSettingsPresetStore(prefs(context))
 }
