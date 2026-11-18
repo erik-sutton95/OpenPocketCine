@@ -376,7 +376,10 @@ space after rotation or resizing, including saved positions. Long-press a View A
   joystick on the right is Calibrate Head Lock: that head pose and that
   gimbal pose are shared forward. A head turn pans the Pocket; a nod tilts.
   The gimbal follows that direction using direct angle targets. Roll is shown,
-  not driven. The same control becomes STOP and clears the lock. Manual controls and Motion Control takes take
+  not driven. Head tracking drives the gimbal in Follow and Tilt locked only: in FPV
+  or Direction Lock, Calibrate says so and the gimbal does not move. If the gimbal
+  ends up past the −44° to +70° tilt range, head tracking stops and says so; bring it
+  back with the joystick or recenter, then calibrate again. The same control becomes STOP and clears the lock. Manual controls and Motion Control takes take
   priority; lost head motion pauses tracking. Allow Motion & Fitness when
   prompted. If motion never arrives, Calibrate offers an explicit retry;
   a Bluetooth connection alone does not confirm motion delivery.
