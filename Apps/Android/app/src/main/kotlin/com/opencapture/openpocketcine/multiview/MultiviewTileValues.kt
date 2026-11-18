@@ -1,12 +1,10 @@
 package com.opencapture.openpocketcine.multiview
 
-import com.opencapture.opencine.appkit.MultiviewCameraAction
 import com.opencapture.opencine.appkit.MultiviewReadout
 import com.opencapture.opencine.appkit.MultiviewRecordContext
-import com.opencapture.opencine.appkit.MultiviewTile
-import com.opencapture.opencine.appkit.MultiviewTileStatus
-import com.opencapture.opencine.appkit.withPower
-import com.opencapture.opencine.dji.hasMultiviewPreview
+import com.opencapture.opencine.appkit.MultiviewTally
+import com.opencapture.opencine.appkit.MultiviewTileReadings
+import com.opencapture.opencine.appkit.recordContext
 import com.opencapture.opencine.core.PowerStatus
 import com.opencapture.opencine.cameracontrols.cameraBatteryReadoutLabel
 import com.opencapture.opencine.vocabulary.CameraCommands
@@ -33,21 +31,18 @@ internal data class MultiviewTileReadouts(
 
 internal fun multiviewTileReadouts(
     index: Int, name: String, model: String, settings: CameraStatus, timecode: String?,
-    recordingObservation: Boolean?, recordingAvailable: Boolean, recordingBusy: Boolean,
-    recovering: Boolean, hasPicture: Boolean, failure: String?, recordingNote: String? = null,
+    recordingObservation: Boolean?, recordingBusy: Boolean,
+    recovering: Boolean, hasPicture: Boolean, failure: String?,
     power: PowerStatus,
     colorFamily: String = "pocket",
     storage: StorageStatus? = null,
 ): MultiviewTileReadouts {
     val elapsed = settings.recordElapsedSec.coerceAtLeast(0)
-    val recording = when {
-        recordingBusy -> "WAIT"
-        recordingNote?.contains("rejected") == true || recordingNote?.contains("No confirmation") == true -> "REC ?"
-        recovering -> "HOLD"
-        !recordingAvailable || recordingObservation == null -> "REC —"
-        recordingObservation -> "REC ${elapsed / 60}:${(elapsed % 60).toString().padStart(2, '0')}"
-        else -> "STBY"
-    }
+    // As iOS: the last reported observation is shown even when status is stale.
+    val recording = MultiviewTally.text(
+        recording = recordingObservation,
+        seconds = elapsed, waiting = recordingBusy, holding = recovering, failed = failure != null,
+    )
     val resolution = VideoResolution.fromRaw(settings.resolutionCode)?.label ?: "—"
     val fps = if (settings.fps > 0) "${settings.fps}p" else "—"
     val color = if (settings.colorMode < 0) "—" else CameraCommands.colorLabel(settings.colorMode, colorFamily)
@@ -57,7 +52,7 @@ internal fun multiviewTileReadouts(
         battery = cameraBatteryReadoutLabel(power.batteryReading) ?: "\u2014",
         storage = (if (storage != null) storage.storageReadout else settings.storageReadout)?.free ?: StorageReadout.UNAVAILABLE,
         recording = recording, isRecording = recordingObservation == true,
-        format = "$resolution · $fps · $color",
+        format = "$resolution $fps · $color",
         recovery = when {
             failure != null -> "Connection needs attention"
             recovering -> "Restoring picture…"
@@ -83,74 +78,23 @@ internal fun multiviewExposureReadouts(settings: CameraStatus): List<Pair<String
 internal fun multiviewStageReadouts(settings: CameraStatus): List<MultiviewReadout> =
     multiviewExposureReadouts(settings).map { (title, value) -> MultiviewReadout(title, value) }
 
-/** Pocket's camera option ids beside the shared Live View id. */
-internal object MultiviewTileAction {
-    const val RECORD = "record"
-    const val LUT = "lut"
-    const val RECONNECT = "reconnect"
-    const val EXPERIMENTAL = "experimental"
-    const val REMOVE = "remove"
-}
-
-/** The shared stage's values for one slot, null while it is empty. */
-internal fun MultiviewSession.stageTile(index: Int): MultiviewTile? {
+/** Pocket's camera readings for one slot, null while it is empty; the shared stage tile adds its own. */
+internal fun MultiviewSession.tileReadings(index: Int): MultiviewTileReadings? {
     val tile = tiles[index]
     val camera = tile.camera ?: return null
     val power = tile.control.current.power
     val readouts = multiviewTileReadouts(
         index, camera.name, camera.model.name, tile.settings, tile.timecodeReadout,
-        tile.recordingObservation?.first, tile.recordingAvailable,
-        tile.recordingBusy, tile.recovering, tile.hasPicture, tile.failureMessage, tile.recordingNote,
+        tile.recordingObservation?.first, tile.recordingBusy, tile.recovering, tile.hasPicture, tile.failureMessage,
         power = power, colorFamily = camera.model.family, storage = tile.control.snapshots.value.storage,
     )
-    val settled = !busy && !tile.connecting && !tile.recovering
-    val experimental = tile.failureMessage != null && !tile.experimentalNetwork && tile.identity == null
-    val record = recordPlan(tile)
-    return MultiviewTile(
-        name = camera.name, model = camera.model.name, format = readouts.format,
-        storage = readouts.storage, timecode = tile.timecodeReadout,
-        tally = readouts.recording, recording = readouts.isRecording, lut = tile.lutEnabled,
-        readouts = multiviewStageReadouts(tile.settings),
-        status = readouts.recovery?.let { text ->
-            MultiviewTileStatus(
-                text, detail = tile.failureMessage ?: tile.status,
-                inProgress = tile.failureMessage == null && !tile.networkVerified,
-                actions = if (tile.failureMessage == null) emptyList() else listOfNotNull(
-                    MultiviewCameraAction(MultiviewTileAction.EXPERIMENTAL, "Try experimental shared Wi-Fi", enabled = settled)
-                        .takeIf { experimental },
-                    MultiviewCameraAction(MultiviewTileAction.RECONNECT, "Reconnect", enabled = settled),
-                    MultiviewCameraAction(
-                        MultiviewTileAction.REMOVE, "Remove", MultiviewCameraAction.Kind.DESTRUCTIVE, enabled = settled,
-                    ),
-                ),
-            )
-        },
-        failure = tile.failureMessage,
-        footnote = "Remove this tile to enable Record all for your other cameras."
-            .takeIf { tile.networkVerified && !camera.hasMultiviewPreview },
-        actions = listOfNotNull(
-            MultiviewCameraAction(
-                MultiviewCameraAction.LIVE_VIEW, "Open Live View", enabled = tile.controlHost != null && !tile.connecting,
-            ),
-            MultiviewCameraAction(
-                MultiviewTileAction.RECORD,
-                if (tile.recordingObservation?.first == true) "Stop recording" else "Start recording",
-                MultiviewCameraAction.Kind.RECORD,
-                enabled = record.isExecutable && !groupRecordingBusy && !closing,
-            ),
-            MultiviewCameraAction(MultiviewTileAction.LUT, if (tile.lutEnabled) "Disable Auto LUT" else "Enable Auto LUT"),
-            MultiviewCameraAction(MultiviewTileAction.RECONNECT, "Reconnect", enabled = settled),
-            MultiviewCameraAction(MultiviewTileAction.EXPERIMENTAL, "Try experimental shared Wi-Fi", enabled = settled)
-                .takeIf { experimental },
-            MultiviewCameraAction(
-                MultiviewTileAction.REMOVE, "Remove camera", MultiviewCameraAction.Kind.DESTRUCTIVE,
-                enabled = !busy && !tile.connecting && !groupRecordingBusy && !tile.recordingBusy && !closing,
-            ),
-        ),
-    ).withPower(power)
+    return MultiviewTileReadings(
+        name = camera.name, model = camera.model.name, format = readouts.format, storage = readouts.storage,
+        timecode = tile.timecodeReadout, readouts = multiviewStageReadouts(tile.settings),
+        recordingSeconds = tile.settings.recordElapsedSec.coerceAtLeast(0), power = power,
+        hasPicture = tile.hasPicture,
+    )
 }
 
 /** The record plan for every camera (null) or one slot, with what blocks it now. */
-internal fun MultiviewSession.recordContext(slot: Int?): MultiviewRecordContext = MultiviewRecordContext(
-    recordPlan(slot?.let { tiles[it] }), busy = busy || groupRecordingBusy, closing = closing,
-)
+internal fun MultiviewSession.recordContext(slot: Int?): MultiviewRecordContext = coordinator.recordContext(slot)

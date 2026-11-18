@@ -53,6 +53,81 @@ The Android instrumentation tests drive the shared stage; on the lane emulator
 the same 9 of 19 pass before and after. Physical Multiview remains untested
 for this change on both platforms.
 
+### Shared Multiview coordinator (Plan 3)
+
+Both `MultiviewSession`s are adapters over OpenCine's `MultiviewCoordinator`
+and its `MultiviewHost`; the stage's rules are the iOS session's. iOS changes
+only where the plan settled a rule: a camera already in Multiview ends the
+search at once with "This camera is already in Multiview." (before, the search
+went on and ended "Could not find this camera"), and an invalid network name or
+password now reads "Check the network name and password." instead of a system
+error. Not visible on iOS: probe answers are tried in address order (before,
+in answer order), still at most eight. Android moves to iOS:
+
+- Tile copy and options: a failed tile reads **Connection failed · Options**,
+  a connecting one its link status (Connecting normal preview, Waiting for
+  video); **Live View** (not while the picture is restored), record enabled
+  while the camera's record state is fresh, Auto LUT only on cameras with a
+  preview, Reconnect on preview cameras and failures, and the network-only
+  footnote "Remove this camera to enable group recording for your other
+  cameras." The failure card's buttons follow iOS's options order (Reconnect,
+  Try experimental shared Wi-Fi, Remove camera; before, Try experimental came
+  first), and Remove stays available during a repair, as on iOS.
+- A camera already in Multiview ends the search at once with "This camera is
+  already in Multiview.", also when a rejoin finds it in another tile.
+- Bluetooth discovery stops while the stage is full, or in the background with
+  nothing connecting.
+- The settings editor follows iOS's rule: it needs the camera's record state
+  under 3 s old and no record command or Record all in flight (it closes and
+  retires queued changes around a record press), no longer refuses on a failure
+  message, closes when its camera connects, recovers or changes control path,
+  and stays open in the background (no change reaches the camera until the
+  return).
+- The network check is iOS's (name 1 to 32 bytes, password at most 63).
+
+Record all still writes "Waiting for camera confirmation" on each targeted
+tile, now at each camera's send as iOS does. Android keeps on purpose, as the
+handbook's Android differences name them: 24 probes a batch, the early identity
+read (kept through a lost join reply so Reconnect only searches again), the
+decoder rebuild after Live View and repair only while a tile surface is
+mounted. The instrumentation tests drive the adapter (a test-only tile reset,
+the background test on iOS's rule); they compile but were not run on a device.
+Physical Multiview remains untested for this change on both platforms.
+
+### Shared Multiview screen (Plan 4)
+
+Both shells now render OpenCine's shared `MultiviewScreen`: the stage, the Add camera list, the
+network wizard, the camera settings popup, borrowed Live View and the close and cleanup prompts.
+`MultiviewSession` is its `MultiviewScreenHost` on each platform and keeps only what Pocket has:
+the tile pictures and backdrop, the readings, the settings editor and its controls, Live View and
+the wizard's Wi-Fi values. iOS is the reference and does not change visibly (layout, copy, order
+and accessibility identifiers are its own, now in OpenCine). Android moves to iOS:
+
+- The settings popup's rail follows iOS's order and titles: ISO, SHUTTER, EXPOSURE, WB, FOCUS,
+  APERTURE, MODE, FORMAT, COLOR, AUDIO (before, mode came after color and the titles were mixed
+  case); camera tabs show upper-cased ("A · CAMERA 0"). TalkBack still reads them mixed case, as
+  VoiceOver does: "A · Camera 0", "Shutter", "Exposure"; the ISO tab now reads "Iso", iOS's label
+  (before, "ISO").
+- The popup keeps the editor across a record start or stop (mode, format and color lock, as on
+  iOS; before, the editor closed and reopened). While a camera's controls are not ready it reads
+  "Waiting for camera controls…" (before, "Camera settings are available when its connection is
+  ready."), and with the editor open but no control path "Controls unavailable". The rail and the
+  lock follow the editor's own status, as before; the editor's command note sits under the
+  popup's status line ("Locked while recording", "Controls unavailable"), as on iOS.
+- The popup's close button no longer plays the selection haptic, as iOS's has none.
+- The locked Shared Wi-Fi page carries the network's saved password, as iOS's does.
+- With no camera on the focused slot the program readouts are empty instead of dashes.
+
+Android keeps on purpose its per-tile menu and failure status card (Compose's look), the wizard's
+Wi-Fi name permission and its network path binding by source.
+
+On a private iOS simulator the 59 Multiview unit tests and the six Multiview UI flows (with the
+network wizard flow) pass before and after; the UI review screens match apart from animation
+phase (the recording tally, the record button's glow and the glass over them) and one keyboard
+transition in the wizard. Android's Multiview unit tests and lint pass; the instrumentation tests
+compile but were not run on a device. Physical Multiview remains untested for this change on both
+platforms.
+
 ### Multiview AUDIO admission continuation
 
 Android's Multiview settings categories now require the tile's typed AUDIO control to be
