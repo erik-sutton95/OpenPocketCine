@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- The monitor's lock button also holds the screen rotation, upside-down landscape
+  included, so a phone mounted inverted no longer flips when it is levelled (discussion #564).
+
 ### Fixed
 
 - iOS AirPods head tracking no longer drives the gimbal in FPV or Direction Lock, where it
