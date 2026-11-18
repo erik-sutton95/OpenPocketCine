@@ -9,13 +9,13 @@ import OpenPocketViewCore
 @MainActor
 enum OsmoMonitorPresentation {
     static func zoomTapStops(_ session: CameraSession) -> MonitorZoomTapStops {
-        // Only the Pro's native capability table includes the 6×/12× range.
+        // Only the Pro's native capability table includes the 6×/12×/18× range.
         // Other bodies retain their full ordinary tap sequence (including 4×).
         let supportsExtended =
             session.connectedCamera?.model.zoomStops.contains(12)
             ?? session.zoomStops.contains(12)
         return MonitorZoomTapStops(
-            supported: session.zoomStops, extended: supportsExtended ? [6, 12] : [])
+            supported: session.zoomStops, extended: supportsExtended ? [6, 12, 18] : [])
     }
 
     static func zoomCaption(_ session: CameraSession) -> String {

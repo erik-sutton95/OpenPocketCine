@@ -11,6 +11,11 @@ All notable changes to this project are documented here. The format is based on
 - The monitor's lock button also holds the screen rotation, upside-down landscape
   included, so a phone mounted inverted no longer flips when it is levelled (discussion #564).
 
+### Changed
+
+- Pocket 4 Pro: digital zoom now reaches 18x (DJI's November 2026 firmware). On older firmware the
+  camera stops at 12x and the zoom readout shows 12x (#645).
+
 ### Fixed
 
 - iOS AirPods head tracking no longer drives the gimbal in FPV or Direction Lock, where it

@@ -50,7 +50,7 @@ Free and open source.
 
 | | Camera | Live view | Camera control | Gimbal | Notes |
 | :---: | --- | :---: | :---: | :---: | --- |
-| <img src="docs/assets/screens/osmo-pocket-4p.webp" alt="Osmo Pocket 4 Pro" height="64"> | **Osmo Pocket 4 Pro** | ✅ | ✅ | ✅ | Primary test camera. 1×/3× optical, 6×/12× zoom. D-Log2 hops to D-Log when you zoom. |
+| <img src="docs/assets/screens/osmo-pocket-4p.webp" alt="Osmo Pocket 4 Pro" height="64"> | **Osmo Pocket 4 Pro** | ✅ | ✅ | ✅ | Primary test camera. 1×/3× optical, 6×/12×/18× zoom (18× on DJI's November 2026 firmware). D-Log2 hops to D-Log when you zoom. |
 | <img src="docs/assets/screens/osmo-pocket-4-catalog.webp" alt="Osmo Pocket 4" height="64"> | **Osmo Pocket 4** | ✅ | ✅ | ✅ | 1×/2×/4× zoom. |
 | <img src="docs/assets/screens/osmo-pocket-3.webp" alt="Osmo Pocket 3" height="64"> | **Osmo Pocket 3** | ✅ | ✅ | ✅ | The wider format and firmware matrix still needs testing. |
 | <img src="docs/assets/screens/osmo-nano.webp" alt="Osmo Nano" height="64"> | **Osmo Nano** | ✅ | ✅ | – | Fixed 1× lens, so zoom controls are hidden. |

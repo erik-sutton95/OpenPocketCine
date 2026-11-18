@@ -140,8 +140,9 @@ Info, Share and Delete (when available). The timeline sits above Back 15 seconds
 Play/Pause and Forward 15 seconds; landscape places the other playback options
 in that same row. Side arrows change clips. Photo review keeps Share/Delete at
 the top and Favorite at the bottom, matching iOS.
-On Pocket 4 Pro, tap zoom to alternate 1× and 3×; double tap for 6× and 12×
-when digital zoom is available. Other cameras retain their supported zoom stops.
+On Pocket 4 Pro, tap zoom to alternate 1× and 3×; double tap for 6×, 12× and 18×
+when digital zoom is available (18× needs DJI's November 2026 firmware; older
+firmware stops at 12× and the chip shows 12×). Other cameras retain their supported zoom stops.
 Hold the zoom value for a continuous dial. Its limits and recording restrictions
 remain camera-specific. Gimbal cameras expose Mode, Speed, Ramp and the existing
 experimental Motion Control editor in a wider trailing drawer. Mode, Speed and
@@ -337,7 +338,7 @@ Build recipes: [Setup](../../guides/setup/). The living JNI/I/O notes:
 ## Operator surface
 
 Chrome, assists, capture, Operator Setup, and media are meant to match iOS.
-Current zoom chips are (Pocket 4 Pro 1×/3×/6×/12×; Pocket 4 1×/2×/4×;
+Current zoom chips are (Pocket 4 Pro 1×/3×/6×/12×/18×; Pocket 4 1×/2×/4×;
 Pocket 3 1×/2×/4× with 4K max 2×). Nano is a fixed 1× lens: no zoom chip, pinch,
 disc or controller zoom, and no gimbal stick or tap focus. Pocket 3's ceiling is
 per-FORMAT, not one generic 4×: **1080 4×, 2.7K 3×, 2160 1:1 3×, 4K 2×,

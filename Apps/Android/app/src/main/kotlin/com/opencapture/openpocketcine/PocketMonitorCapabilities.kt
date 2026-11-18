@@ -30,6 +30,6 @@ internal fun AppModel.showsAudio(status: CameraStatus): Boolean =
 /** The camera profile, including current recording mode limits, owns shortcut availability. */
 internal fun AppModel.monitorZoomStops(): com.opencapture.monitorui.MonitorZoomTapStops {
     val profile = session.connectedCamera?.model
-    val extended = if (profile?.zoomStops?.contains(12.0) == true) listOf(6.0, 12.0) else emptyList()
+    val extended = if (profile?.zoomStops?.contains(12.0) == true) listOf(6.0, 12.0, 18.0) else emptyList()
     return com.opencapture.monitorui.MonitorZoomTapStops.from(session.zoomStops(), extended)
 }

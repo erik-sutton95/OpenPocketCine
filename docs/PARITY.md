@@ -520,7 +520,7 @@ Must match across shells. Do not keep a second copy in `ANDROID.md`.
   an active or paused program. Other outside
   taps minimize without activating covered controls. Window dragging uses local
   transient placement and one shared-model commit on release.
-- Pocket 4 Pro zoom: single tap cycles 1× / 3×; double tap cycles 6× / 12× when
+- Pocket 4 Pro zoom: single tap cycles 1× / 3×; double tap cycles 6× / 12× / 18× when
   the active mode supports digital zoom. Other cameras retain their supported
   single-tap stops. Holding the chip still opens the continuous dial.
 - Movable scope panels (WAVE / PARADE / HISTO / VECTOR / LIGHTS / ND): drag
