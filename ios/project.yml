@@ -77,6 +77,8 @@ targets:
       - package: OpenCine
         product: OpenCineAppKitApple
       - package: OpenCine
+        product: OpenCineStreaming
+      - package: OpenCine
         product: OpenCineCameraControls
       - package: OpenCine
         product: OpenCineDJI
@@ -146,6 +148,8 @@ targets:
         # OpenCineApple links AVFoundation external USB capture support.
         INFOPLIST_KEY_NSCameraUsageDescription: "If you use an external USB capture device on iPad, OpenPocketCine needs camera access to receive its video."
         INFOPLIST_KEY_NSMotionUsageDescription: "OpenPocketCine uses headphone motion so AirPods can aim the gimbal."
+        # Live streaming (OpenCineStreamingApple) sends the microphone's sound with the picture.
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "OpenPocketCine uses the microphone for the sound of a live stream you start."
         # iOS names the current Wi-Fi only to apps with precise location (Add setup › Wi-Fi).
         INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "OpenPocketCine uses your location only so iOS can tell it which Wi-Fi this iPhone is on, to offer that network when you add a camera's Wi-Fi setup. Your location is not stored or shared."
         INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking: YES
@@ -180,6 +184,8 @@ targets:
         product: OpenPocketViewCore
       - package: OpenCine
         product: OpenCineCore
+      - package: OpenCine
+        product: OpenCineStreaming
       - package: OpenCine
         product: OpenCineMedia
       - package: OpenCine
