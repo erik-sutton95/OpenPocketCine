@@ -1,15 +1,19 @@
 package com.opencapture.openpocketcine.bridge
 
 import com.opencapture.opencine.dji.DjiNative
+import com.opencapture.opencine.streaming.StreamingNative
 
 /**
  * JNI binding to `libOpenPocketCineAndroid.so` for this app's own natives: core version, LUT
- * packing and feed-effect cubes. The DJI wire natives in the same library
- * belong to OpenCine's [DjiNative]. Staged by `:app:stageSwiftCore` / `just android-core`.
+ * packing and feed-effect cubes. The DJI wire natives in the same library belong to OpenCine's
+ * [DjiNative], the live stream natives to OpenCine's [StreamingNative]. Staged by
+ * `:app:stageSwiftCore` / `just android-core`.
  */
 object SwiftCore : com.opencapture.opencine.cameracontrols.MonitorFeedEffectsPacker {
-    /** Loads the library once for both facades (this one and [DjiNative]). */
-    override val isAvailable: Boolean by lazy { DjiNative.load("OpenPocketCineAndroid") }
+    private const val LIBRARY = "OpenPocketCineAndroid"
+
+    /** Loads the library once for all three facades (this one, [DjiNative] and [StreamingNative]). */
+    override val isAvailable: Boolean by lazy { DjiNative.load(LIBRARY).also { StreamingNative.load(LIBRARY) } }
 
     external fun coreVersion(): String
 
