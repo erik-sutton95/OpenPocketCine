@@ -13,7 +13,9 @@ extension AppModel {
                 keychainService: "com.opencapture.openpocketcine.live-stream",
                 route: { [weak self] in self?.liveStreamRoute },
                 source: { [weak self] in self?.liveStreamSource },
-                attachPicture: { [weak self] in self?.session.decoder.setCleanPictureTap($0) }))
+                attachPicture: { [weak self] in self?.session.decoder.setCleanPictureTap($0) },
+                // No permission gate of its own: the plain system request, after Go live is confirmed.
+                microphoneAccess: LiveStreamHost.systemMicrophoneAccess))
     }
 
     /// The route only while a camera shows a live picture; the camera's own Wi-Fi blocks streaming.
