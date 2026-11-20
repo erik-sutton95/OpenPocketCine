@@ -7,7 +7,7 @@ import com.opencapture.opencine.appkitnative.MonitorLiveFeedSource
 import com.opencapture.opencine.appkitnative.MonitorFaceReadbackEpoch
 import com.opencapture.opencine.core.ConnectionState
 import com.opencapture.opencine.dji.PocketCameraSession
-import com.opencapture.openpocketcine.feed.LiveFeed
+import com.opencapture.opencine.appkitnative.LiveStreamOverlay
 
 
 import com.opencapture.opencine.cameracontrols.*
@@ -87,7 +87,7 @@ fun LiveViewScreen(model: AppModel) {
     val source = remember(session) { monitorLiveFeedSource { session } }
     val plan = rememberLiveFeedEffectsPlan(assist = assist, lutSelection = model.lutSelection, status = status,
         family = session.connectedCamera?.model?.family.orEmpty(), cameraName = session.connectedCamera?.name)
-    MonitorLiveFeedHost(LiveFeed, source,
+    MonitorLiveFeedHost(model.liveFeed, source,
         owners = MonitorLiveFeedOwners(assist, model.scopeBus, model.inspectorPreview),
         display = MonitorLiveFeedDisplay(plan, CameraCommands.liveViewFlip(poseViewFlip, assist.mirrorsHorizontally),
             model::chromeSectionMounts, model.portraitFeedAspect, model.virtualJoystickSize, model.hdrDisplayActive),
@@ -122,5 +122,7 @@ fun LiveViewScreen(model: AppModel) {
                 model.endGimbalStick()
                 if (reason == MonitorInputBlock.LOCK) session.cancelProgrammedMove()
             }, modifier = modifier, picture = picture)
+        // Go live, its status, notice and warnings at the top center of the picture.
+        model.liveStream?.let { LiveStreamOverlay(it.coordinator) }
     }
 }

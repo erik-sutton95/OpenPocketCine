@@ -1,5 +1,6 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.appkitnative.LiveStreamHostEffects
 import com.opencapture.opencine.appkit.MonitorRemoteShutter
 import com.opencapture.opencine.cameracontrols.LocalMonitorRemoteShutter
 import com.opencapture.opencine.cameracontrols.LocalMonitorDeliveryCoordinator
@@ -91,6 +92,10 @@ open class MainActivity : ComponentActivity() {
                 CompositionLocalProvider(LocalOperatorHaptics provides haptics, LocalMonitorDeliveryCoordinator provides delivery,
                     LocalMonitorRemoteShutter provides remoteShutter) {
                     OpenPocketCineApp(model)
+                    // While a stream runs the screen stays awake; leaving the app ends it with a
+                    // restart offer. Here at the root, not in Live View, so it holds when the
+                    // monitor closes or Multiview covers it mid-stream.
+                    model.liveStream?.let { LiveStreamHostEffects(it.coordinator) }
                     Overlay(model)
                     MonitorOperatorDeliveryChrome(delivery, PocketMediaShare, { MediaHTTP.playbackMIMEType(it.name) })
                 }

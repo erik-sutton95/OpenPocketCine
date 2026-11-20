@@ -124,6 +124,15 @@ class AppModel(
     /** Wi-Fi and Hotspot passwords, shared with Multiview (iOS `MultiviewNetworkStore`). */
     private val networkStore = com.opencapture.opencine.dji.MultiviewNetworkStore(context)
     val session = DjiCameraSession(context, AppSessionHost(context), borrowing, controlLease)
+    /**
+     * Live streaming of this model's own camera (single camera): the root model's, never a
+     * Multiview tile's borrowed Live View or control editor. Null when the Swift library did not load.
+     */
+    internal val liveStream: com.opencapture.openpocketcine.livestream.PocketLiveStream? =
+        if (borrowing == null) com.opencapture.openpocketcine.livestream.PocketLiveStream.create(appContext, session, scope) else null
+    /** The live feeds: with the stream's clean-picture tap when this model streams. */
+    internal val liveFeed: com.opencapture.opencine.appkitnative.MonitorLiveFeedIntegration
+        get() = liveStream?.feed ?: com.opencapture.openpocketcine.feed.LiveFeed
 
     /**
      * Cameras and pairing through the shared OpenCine flow (SHELL-02): the DJI integration over
@@ -691,6 +700,7 @@ class AppModel(
         if (monitor?.isBorrowed == true) shell.close()
         else monitor?.session?.closeNow(SessionCloseReason.REQUESTED)
         inspectorPreview.close()
+        liveStream?.close()
         scope.cancel()
         session.close()
     }
