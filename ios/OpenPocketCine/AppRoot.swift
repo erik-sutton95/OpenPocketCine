@@ -38,6 +38,8 @@ final class AppModel {
     #endif
     /// A saved hotspot connect waiting for the operator to turn Personal Hotspot on.
     var hotspotQuestion: HotspotQuestion?
+    /// Live streaming (the shared OpenCine coordinator); only the app's root model streams.
+    private(set) var liveStream: LiveStreamCoordinator?
 
     /// `connects`: the cameras and pair pages discover and connect through this model (the app's
     /// one root model). A Multiview tile's live or settings model, previews and tests never do.
@@ -92,6 +94,7 @@ final class AppModel {
         }
         control.noteFor = AppModel.controlNote(for:_:)
         control.onNote = { [weak self] in self?.session.controlNote = $0 }
+        if connects { liveStream = makeLiveStream() }
     }
 
     /// main's write notes come from the session's own send path: the camera's message on a
@@ -953,7 +956,8 @@ struct AppRoot: View {
         .onChange(of: model.relayClient.status) { _, status in
             model.noteWatcherStatusChanged(status)
         }
-        .monitorScreenWake(enabled: model.keepScreenAwake)
+        .monitorScreenWake(enabled: model.keepScreenAwake || model.liveStream?.isRunning == true)
+        .liveStreamLifecycle(model.liveStream)
         .monitorRemoteShutter(enabled: model.remoteShutterEnabled,
             liveViewFront: model.remoteShutterLiveViewFront, subsystem: "OpenPocketCine") { model.remoteShutterRecord() }
         .onChange(of: model.gimbalAnalogHeld) { _, held in

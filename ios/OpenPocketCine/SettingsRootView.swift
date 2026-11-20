@@ -28,7 +28,8 @@ struct SettingsRootView: View {
         MonitorOperatorSettingsScreen(shell: model.shell, brand: "OpenPocketCine",
             preferences: OperatorPrefs.common, display: OperatorPrefs.display, assist: model.assist,
             library: model.session.mediaLibrary, operatorSession: model.operatorSession,
-            configuration: configuration.withCameraPresets(model.cameraPresets))
+            configuration: configuration.withCameraPresets(model.cameraPresets)
+                .withLiveStream(model.liveStream))
     }
 
     private var configuration: MonitorOperatorSettingsConfiguration<MonitorLUTLooks> {

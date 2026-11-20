@@ -47,6 +47,8 @@
 	<true/>
 	<key>NSMotionUsageDescription</key>
 	<string>OpenPocketCine uses headphone motion so AirPods can aim the gimbal.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>OpenPocketCine uses the microphone for the sound of a live stream you start.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_opc-mon._tcp</string>
