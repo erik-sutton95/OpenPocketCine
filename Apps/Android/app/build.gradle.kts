@@ -218,9 +218,10 @@ val stageSwiftCore =
                 include("Package.swift", "Package.resolved", "Sources/**")
             },
             // OpenCineMedia, OpenCineMotion, OpenCineRelay, OpenCineDJI (re-exported by
-            // OpenPocketViewCore), OpenCineCore, which they depend on, and OpenCineDJIAndroid (the
-            // DjiNative JNI exports): the root Package.swift takes them from the sibling OpenCine
-            // checkout.
+            // OpenPocketViewCore), OpenCineCore, which they depend on, OpenCineDJIAndroid (the
+            // DjiNative JNI exports) and OpenCineStreamingAndroid over OpenCineStreaming (the
+            // StreamingNative JNI exports): the root Package.swift takes them from the sibling
+            // OpenCine checkout.
             fileTree(repositoryRoot.resolve("../OpenCine")) {
                 include(
                     "Package.swift",
@@ -233,6 +234,8 @@ val stageSwiftCore =
                     "Sources/OpenCineJNISupport/**",
                     "Sources/OpenCineDJI/**",
                     "Sources/OpenCineDJIAndroid/**",
+                    "Sources/OpenCineStreaming/**",
+                    "Sources/OpenCineStreamingAndroid/**",
                     "Sources/OpenCineJNI/**",
                     "scripts/android-stage-swift-core.sh",
                 )
@@ -300,6 +303,9 @@ dependencies {
     implementation("com.opencapture.opencine:multicam:0.1.0-SNAPSHOT")
     // libopc_vulkan.so and its JNI facade (feed.OpcVulkan), built by OpenCineCore's `:vulkan` module.
     implementation("com.opencapture.opencine:vulkan:0.1.0-SNAPSHOT")
+    // Live streaming: the StreamingNative JNI facade this app's Swift library implements, the
+    // publisher and the stream key store (composed by appkit-native's LiveStreamComposition).
+    implementation("com.opencapture.opencine:streaming:0.1.0-SNAPSHOT")
 
     implementation(platform(libs.compose.bom))
     implementation(libs.androidx.activity.compose)

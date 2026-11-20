@@ -3,8 +3,9 @@
 // Hand-written `@_cdecl` shims matching the `external fun` declarations in
 // Apps/Android/app/.../bridge/SwiftCore.kt (core version, LUT and feed-effect cubes). The DJI
 // wire natives behind OpenCine's Kotlin `DjiNative` come from OpenCine's OpenCineDJIAndroid
-// target, which this facade links into the same .so. Coarse boundary: strings, byte arrays, and
-// primitives only.
+// target, and the live stream natives behind OpenCine's Kotlin `StreamingNative` from its
+// OpenCineStreamingAndroid target; this facade links both into the same .so. Coarse boundary:
+// strings, byte arrays, and primitives only.
 //
 // This file compiles empty on Darwin so `swift test` is unaffected.
 #if os(Android)

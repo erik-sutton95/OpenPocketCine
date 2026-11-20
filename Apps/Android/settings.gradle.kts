@@ -39,6 +39,7 @@ includeBuild("../../../OpenCine/Android") {
         substitute(module("com.opencapture.opencine:camera-controls")).using(project(":camera-controls"))
         substitute(module("com.opencapture.opencine:app-ui-testing")).using(project(":app-ui-testing"))
         substitute(module("com.opencapture.opencine:appkit-native")).using(project(":appkit-native"))
+        substitute(module("com.opencapture.opencine:streaming")).using(project(":streaming"))
     }
 }
 

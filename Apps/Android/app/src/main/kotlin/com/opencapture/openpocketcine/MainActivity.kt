@@ -1,5 +1,7 @@
 package com.opencapture.openpocketcine
 
+import com.opencapture.opencine.appkitnative.LiveStreamHostEffects
+import com.opencapture.opencine.appkitnative.LiveStreamRootIndicator
 import com.opencapture.opencine.appkit.MonitorRemoteShutter
 import com.opencapture.opencine.cameracontrols.LocalMonitorRemoteShutter
 import com.opencapture.opencine.cameracontrols.LocalMonitorDeliveryCoordinator
@@ -38,6 +40,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -91,7 +97,18 @@ open class MainActivity : ComponentActivity() {
                 CompositionLocalProvider(LocalOperatorHaptics provides haptics, LocalMonitorDeliveryCoordinator provides delivery,
                     LocalMonitorRemoteShutter provides remoteShutter) {
                     OpenPocketCineApp(model)
+                    // While a stream runs the screen stays awake; leaving the app ends it with a
+                    // restart offer. Here at the root, not in Live View, so it holds when the
+                    // monitor closes or Multiview covers it mid-stream.
+                    model.liveStream?.let { LiveStreamHostEffects(it.coordinator) }
                     Overlay(model)
+                    // A stream that outlives Live View (camera lost, Multiview opened) stays
+                    // visible and stoppable here; hidden while Live View shows its control.
+                    model.liveStream?.let {
+                        Box(Modifier.fillMaxSize().safeDrawingPadding().padding(top = 8.dp), contentAlignment = Alignment.TopCenter) {
+                            LiveStreamRootIndicator(it.coordinator)
+                        }
+                    }
                     MonitorOperatorDeliveryChrome(delivery, PocketMediaShare, { MediaHTTP.playbackMIMEType(it.name) })
                 }
             }

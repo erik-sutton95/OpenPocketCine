@@ -55,6 +55,9 @@ let package = Package(
                 .product(name: "OpenCineJNISupport", package: "OpenCine"),
                 // The DJI wire natives behind OpenCine's Kotlin DjiNative (linked into this .so).
                 .product(name: "OpenCineDJIAndroid", package: "OpenCine"),
+                // The live stream run controller behind OpenCine's Kotlin StreamingNative (linked
+                // into this .so).
+                .product(name: "OpenCineStreamingAndroid", package: "OpenCine"),
             ]
         ),
         .testTarget(
