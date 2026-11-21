@@ -19,8 +19,10 @@ extension AppModel {
                 microphoneAccess: LiveStreamHost.systemMicrophoneAccess,
                 camera: PocketCameraStreamSource(
                     camera: { [weak self] in self?.session.connectedCamera }, hostPath: SharedWiFiPath(),
-                    release: { [weak self] in self?.openMultiview() },
-                    resume: { [weak self] in self?.closeMultiview() })))
+                    release: { [weak self] in self?.releaseCameraForStream() ?? false },
+                    resume: { [weak self] in self?.closeMultiview() },
+                    confirmHotspot: { [weak self] network in await self?.askHotspot(network) ?? false },
+                    settle: PocketCameraStreamSource.settleAfterRelease)))
     }
 
     /// The route only while a camera shows a live picture; the camera's own Wi-Fi blocks streaming.

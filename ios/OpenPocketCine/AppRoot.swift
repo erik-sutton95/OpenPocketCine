@@ -551,6 +551,15 @@ final class AppModel {
         if cameras.connected == nil { session.startScan() }
     }
 
+    /// "1080p from camera" takes the camera from monitoring: connects in flight stop too, so no
+    /// second link moves the camera while its own stream starts. `false` while Multiview holds it.
+    func releaseCameraForStream() -> Bool {
+        guard !session.isMultiviewBorrowed else { return false }
+        cameras.cancelAll()
+        disconnect()
+        return true
+    }
+
     /// Connect shows the monitor — never leftover Operator Setup, Media, or Edit view.
     func setShareThisFeed(_ on: Bool) {
         guard !session.isMultiviewBorrowed else { return }
@@ -1039,7 +1048,19 @@ struct LinkExperience: View {
     @State private var diagnostics: MonitorDiagnosticsShareItem?
     @State private var diagnosticsFailure: String?
     @State private var showMultiview = false
+    @State private var cameraMonitor = CameraMonitorPresence()
     @State private var reviewAddSetup: SavedCamera?
+
+    private struct CameraMonitorInputs: Equatable {
+        var active: Bool
+        var endPending: Bool
+    }
+
+    private var cameraMonitorInputs: CameraMonitorInputs {
+        CameraMonitorInputs(
+            active: model.liveStream?.cameraStreamActive ?? false,
+            endPending: model.liveStream?.monitorState?.end != nil)
+    }
 
     var body: some View {
         AppShell(
@@ -1081,9 +1102,12 @@ struct LinkExperience: View {
         .ignoresSafeArea()
         // "1080p from camera": the camera's own picture replaces the monitor while it streams.
         .overlay {
-            if let liveStream = model.liveStream, liveStream.cameraStreamActive {
+            if let liveStream = model.liveStream, cameraMonitor.shown {
                 LiveStreamCameraMonitor(coordinator: liveStream)
             }
+        }
+        .onChange(of: cameraMonitorInputs, initial: true) { _, inputs in
+            cameraMonitor.update(active: inputs.active, endPending: inputs.endPending)
         }
         .overlay { MonitorOperatorDeliveryChrome(model: model.delivery.lifetime, scope: .root, remoteDisplayName: "Frame.io") }
         // The app's one share sheet, above any gallery, player or photo cover (A2-52).
