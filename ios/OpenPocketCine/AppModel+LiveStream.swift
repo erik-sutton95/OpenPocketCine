@@ -1,11 +1,12 @@
 import OpenCineAppKitApple
+import OpenCineApple
 import OpenCineCore
 import OpenCineDJI
 import OpenCineStreaming
 
 /// Live streaming's host values: the keychain service, the route from the active connection setup,
-/// the live feed's shape and the clean picture tap on the live decoder. Nothing here sends a
-/// camera command.
+/// the live feed's shape and the clean picture tap on the live decoder. Only "1080p from camera"
+/// (`PocketCameraStreamSource`) sends camera commands, to start and end the camera's own stream.
 extension AppModel {
     func makeLiveStream() -> LiveStreamCoordinator {
         LiveStreamCoordinator(
@@ -15,7 +16,11 @@ extension AppModel {
                 source: { [weak self] in self?.liveStreamSource },
                 attachPicture: { [weak self] in self?.session.decoder.setCleanPictureTap($0) },
                 // No permission gate of its own: the plain system request, after Go live is confirmed.
-                microphoneAccess: LiveStreamHost.systemMicrophoneAccess))
+                microphoneAccess: LiveStreamHost.systemMicrophoneAccess,
+                camera: PocketCameraStreamSource(
+                    camera: { [weak self] in self?.session.connectedCamera }, hostPath: SharedWiFiPath(),
+                    release: { [weak self] in self?.openMultiview() },
+                    resume: { [weak self] in self?.closeMultiview() })))
     }
 
     /// The route only while a camera shows a live picture; the camera's own Wi-Fi blocks streaming.

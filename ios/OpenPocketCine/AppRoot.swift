@@ -1079,6 +1079,12 @@ struct LinkExperience: View {
             if old == .media, next != .media { model.session.endMediaBrowse() }
         }
         .ignoresSafeArea()
+        // "1080p from camera": the camera's own picture replaces the monitor while it streams.
+        .overlay {
+            if let liveStream = model.liveStream, liveStream.cameraStreamActive {
+                LiveStreamCameraMonitor(coordinator: liveStream)
+            }
+        }
         .overlay { MonitorOperatorDeliveryChrome(model: model.delivery.lifetime, scope: .root, remoteDisplayName: "Frame.io") }
         // The app's one share sheet, above any gallery, player or photo cover (A2-52).
         .monitorDeliverySharePresenter(model.delivery.lifetime)
