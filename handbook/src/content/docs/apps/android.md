@@ -236,8 +236,10 @@ Saving again asks you to replace it.
 Tap **REF** to show or hide a saved reference. Touch and hold it to open the
 options. **Blend** starts at 50% opacity. In **Split**, choose **Left** or
 **Right** for the reference and drag the divider to change how much of each
-image you see. If the framing differs, match the aspect and desqueeze or replace
-the reference. The comparison appears in Live View only.
+image you see. Split starts at 100% opacity. Lower it to see the live picture
+through the reference on the chosen side. Each mode keeps its own opacity.
+If the framing differs, match the aspect and desqueeze or replace the
+reference. The comparison appears in Live View only.
 
 ## Level
 
