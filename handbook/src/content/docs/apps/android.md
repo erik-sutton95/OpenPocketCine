@@ -226,6 +226,17 @@ picture. Mirror changes only the display: recordings and scopes stay
 unflipped, and Vertical leaves the joystick directions unchanged. Video
 playback uses the same axes with its own on/off choice.
 
+## Reference frame
+
+Open **Reference** in Live View and choose **Save Live Frame**, or pause a video
+in Media and choose **Use as Reference**. The app keeps one reference on this
+phone after a restart or camera reconnect. Saving again asks you to replace it.
+
+Turn on **Show Reference** and use **Blend** to compare at 50% opacity, or use
+**Split** and drag the divider to reveal either image. If the framing differs,
+match the aspect and desqueeze or replace the reference. The overlay stays on
+the monitor and does not enter recordings or exports.
+
 ## Level
 
 Enable **LEVEL** in View Assist to see how level the picture is against

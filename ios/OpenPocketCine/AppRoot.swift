@@ -23,6 +23,7 @@ import OpenCineDJIApple
 @Observable
 final class AppModel {
     var session: CameraSession
+    @ObservationIgnored let referenceStore: MonitorReferenceStore?
     @ObservationIgnored let playbackAudioSession = MonitorPlaybackAudioSession()
     /// Saved cameras, nearby sightings, pairing and connect attempts (SHELL-02): the shared flow
     /// over the DJI integration, which connects through `session`.
@@ -49,6 +50,7 @@ final class AppModel {
         #endif
         let session = session ?? CameraSession()
         self.session = session
+        referenceStore = connects ? MonitorReferenceStore() : nil
         var port: any DJIConnectPort = session
         var defaults = UserDefaults.standard
         #if targetEnvironment(simulator)

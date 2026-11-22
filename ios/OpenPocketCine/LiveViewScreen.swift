@@ -22,6 +22,18 @@ extension AppModel: MonitorLiveScreenHost {
     }
     func liveLevelDisplay(_ mode: LevelReading.Mode) -> MonitorLevelDisplay { LevelAssist.display(mode) }
     var livePictureEV: (() -> EvComp?)? { nil }
+    var liveReference: MonitorLiveReferenceSource? {
+        guard let referenceStore else { return nil }
+        let captured = session
+        return .init(store: referenceStore, capture: { [weak self, weak captured] in
+            guard let self, let captured, self.session === captured,
+                let frame = await captured.decoder.referenceFrame(), self.session === captured
+            else { return nil }
+            return frame
+        }, mirrored: { [weak captured] in
+            captured?.decoder.presentedPictureFlip ?? false
+        })
+    }
     func lutPicker() -> some View { LUTPicker(assist: assist) }
 }
 

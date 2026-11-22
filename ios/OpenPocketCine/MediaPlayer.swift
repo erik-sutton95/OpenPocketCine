@@ -67,6 +67,7 @@ struct MediaPlayerView: View {
 
     var body: some View {
         MonitorOperatorPlaybackHost(opening: opening, host: model, values: .app,
+            options: .init(referenceStore: model.referenceStore),
             makeSource: { [model] in PocketPlaybackPresentationSource(model: model) },
             captureSource: { [model] in
                 let captured = model.session, origin = model.shell.monitor?.id

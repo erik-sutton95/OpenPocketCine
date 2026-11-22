@@ -13,6 +13,10 @@ import com.opencapture.monitorui.monitorPlaybackUnitPoint as unitPoint
 import com.opencapture.monitorui.LocalMonitorBackdrops
 import com.opencapture.monitorui.monitorBackdropSource
 import com.opencapture.opencine.appkitnative.MonitorPlaybackFeedView
+import com.opencapture.opencine.appkitnative.MonitorReferenceControls
+import com.opencapture.opencine.runtime.MonitorCleanPictureFrame
+import com.opencapture.opencine.runtime.MonitorReferenceCapture
+import com.opencapture.opencine.runtime.referenceFrame
 import com.opencapture.openpocketcine.feed.LiveFeed
 import com.opencapture.opencine.appkitnative.rememberMonitorBackdropFeed
 import com.opencapture.monitorui.MonitorMaterial
@@ -204,6 +208,7 @@ fun MediaPlayerScreen(files: List<MediaFile>, startingAt: MediaFile, controller:
                 if (!admission.isCurrent()) null else {
                     val next = Media3PlaybackOwner(context, controller.library, controller::playbackCandidates,
                         controller::resolvePlaybackLook, controller::playbackAdmission) { it.fps?.toDouble() }
+                    next.native.observeReferenceFrames()
                     if (!admission.isCurrent()) { next.close(); null } else {
                         composition = next
                         if (!admission.isCurrent()) { next.close(); null } else next.playback
@@ -213,6 +218,8 @@ fun MediaPlayerScreen(files: List<MediaFile>, startingAt: MediaFile, controller:
     }
     val outer by owner.state.collectAsState()
     val state = outer.playback?.state?.collectAsState()?.value
+    val referencePicture = remember(composition, state?.token) { MonitorReferenceCapture<MonitorCleanPictureFrame>() }
+    DisposableEffect(referencePicture) { onDispose { referencePicture.cancel() } }
     val active = state?.active?.payload ?: startingAt
     val initial = remember(owner, opening?.id, startingAt.id) { opening ?: controller.record(startingAt)?.let { record ->
         com.opencapture.opencine.appkit.MonitorMediaGalleryOpen(record,
@@ -262,7 +269,29 @@ fun MediaPlayerScreen(files: List<MediaFile>, startingAt: MediaFile, controller:
                     }?.let { current -> current.native.bufferedThroughSeconds(current.playback.state.value.token) },
                     transfer = state?.look?.transfer)
             }, nativeAudio = { player -> composition?.takeIf { it.playback === player }?.audio },
-            close = onClose, share = { record -> onDeliver(record.payload) }) { player, plan, geometry ->
+            close = onClose, share = { record -> onDeliver(record.payload) },
+            referenceAction = {
+                val captured = composition
+                val token = state?.token
+                if (captured != null && token != null && !coverPresented) {
+                    val sdk = captured.native.player
+                    val receipts = captured.native.observeReferenceFrames()
+                    val canCapture = state.ready && !state.closed && !state.scrubbing && !state.playRequested
+                    MonitorReferenceControls(model.monitorReferenceStore, canCapture, capture = capture@{
+                        val logical = captured.playback
+                        if (!owner.isCurrent(token) || logical.state.value.scrubbing) return@capture null
+                        val parked = receipts.paused(sdk) ?: return@capture null
+                        val video = sdk.videoSize
+                        if (video.width <= 0 || video.height <= 0) return@capture null
+                        val raw = referencePicture.capture(accepts = { parked.frame(it) != null }) ?: return@capture null
+                        val aspect = video.width * video.pixelWidthHeightRatio / video.height
+                        val frame = withContext(Dispatchers.Default) { raw.referenceFrame(aspect) }
+                        frame.takeIf {
+                            owner.isCurrent(token) && !logical.state.value.scrubbing && receipts.isCurrent(sdk, parked)
+                        }
+                    })
+                }
+            }) { player, plan, geometry ->
             val native = composition?.takeIf { it.playback === player }?.native
             if (native != null) {
                 val current by player.state.collectAsState()
@@ -272,7 +301,7 @@ fun MediaPlayerScreen(files: List<MediaFile>, startingAt: MediaFile, controller:
                     zoom = geometry.zoom, sourceWidth = native.player.videoSize.width.takeIf { it > 1 } ?: 1280,
                     sourceHeight = native.player.videoSize.height.takeIf { it > 1 } ?: 720,
                     sourceIdentity = current.token, sourceReady = current.ready,
-                    sourceAdmission = owner::isCurrent, modifier = Modifier.fillMaxSize())
+                    sourceAdmission = owner::isCurrent, modifier = Modifier.fillMaxSize(), referencePicture = referencePicture)
             }
         }
     }

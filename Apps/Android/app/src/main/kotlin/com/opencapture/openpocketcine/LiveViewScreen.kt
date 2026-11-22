@@ -92,6 +92,7 @@ fun LiveViewScreen(model: AppModel) {
         display = MonitorLiveFeedDisplay(plan, CameraCommands.liveViewFlip(poseViewFlip, assist.mirrorsHorizontally),
             model::chromeSectionMounts, model.portraitFeedAspect, model.virtualJoystickSize, model.hdrDisplayActive),
         cover = cover,
+        referenceActionsEnabled = !model.operatorSession.locked,
         onOperatorMenu = { model.disconnect() },
         // The camera holds its overlay chrome while a cover hides the live picture.
         onCover = { session.setOperatorOverlayHeld(it != null) }) {
