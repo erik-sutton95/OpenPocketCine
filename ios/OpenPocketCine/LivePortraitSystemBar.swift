@@ -50,7 +50,7 @@ struct LivePortraitSystemBar: View {
                     }
                     if model.chromeSectionMounts(.railSettings) || model.session.status.isRecording
                     {
-                        LiveSettingsButton { model.shell.open(.settings) }
+                        LiveSettingsButton { model.openSettings() }
                             .chromeEditable(.railSettings, editing: editing)
                         Spacer(minLength: 14)
                     }

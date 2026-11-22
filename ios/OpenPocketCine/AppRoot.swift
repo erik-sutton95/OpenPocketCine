@@ -1,3 +1,4 @@
+import AVFAudio
 import CoreVideo
 import MonitorPresentation
 import MonitorUI
@@ -6,6 +7,7 @@ import OpenCineAppKit
 import OpenCineAppKitApple
 import OpenCineCameraControls
 import OpenCineCore
+import OpenCineDJI
 import OpenCineFrameIO
 import OpenCineFrameIOApple
 import OpenCineRelay
@@ -28,6 +30,8 @@ final class AppModel {
     /// over the DJI integration, which connects through `session`.
     let cameras: CamerasModel
     let control = MonitorControlModel()
+    let voiceControl = MonitorVoiceControl()
+    @ObservationIgnored private var settingsVoiceResume: VoiceCommandPermit?
     let shell: ShellModel
     /// The connected camera's exposure and white balance presets (Settings, Controls tab), kept
     /// beside the saved cameras.
@@ -824,6 +828,74 @@ final class AppModel {
         shell.monitor != nil && shell.cover == nil && !isWatchingFeed
     }
 
+    var voiceControlTarget: VoiceControlTarget? {
+        guard shell.cover == nil else { return nil }
+        return voiceCameraTarget
+    }
+
+    var voiceMonitorTarget: VoiceControlTarget? {
+        // Keep the hidden mic view mounted during an intentional pause for Settings.
+        // A disappearing view can otherwise disarm the session as the monitor resumes.
+        if shell.cover == .settings, settingsVoiceResume?.isCurrent == true { return voiceCameraTarget }
+        return voiceControlTarget
+    }
+
+    private var voiceCameraTarget: VoiceControlTarget? {
+        guard shell.monitor != nil, !isWatchingFeed, !operatorSession.locked, !session.isLocked,
+            !session.isMultiviewBorrowed, !session.isBrowsingMedia, liveStream?.isRunning != true
+        else { return nil }
+        return control.voiceTarget
+    }
+
+    func pauseVoiceForSettings() {
+        guard voiceControl.armed, let target = voiceControlTarget else { return }
+        settingsVoiceResume = VoiceCommandPermit {
+            guard let current = voiceCameraTarget else { return false }
+            return current.session == target.session && current.epoch == target.epoch && current.mode == target.mode
+        }
+        voiceControl.disarm()
+    }
+
+    func cancelSettingsVoiceResume() { settingsVoiceResume = nil }
+
+    func resumeVoiceAfterSettings() {
+        let resume = settingsVoiceResume
+        settingsVoiceResume = nil
+        guard resume?.isCurrent == true, UIApplication.shared.applicationState == .active,
+            voiceControlTarget != nil, !voiceControl.armed
+        else { return }
+        liveVoiceControl?.toggle()
+    }
+
+    func executeVoiceCommand(
+        _ command: VoiceCommand, arm: VoiceCommandPermit, armedTarget: VoiceControlTarget
+    ) async -> String {
+        let camera = session
+        let source = camera.control
+        guard UIApplication.shared.applicationState == .active, arm.isCurrent, !camera.controlBusy,
+            let target = voiceControlTarget, target.session == source.id, target.session == armedTarget.session,
+            target.epoch == armedTarget.epoch, let owner = camera.commandOwner
+        else { return "Camera control is unavailable." }
+        let lens = camera.voiceOpticalLens
+        if command.changesSettings, camera.supportsVoiceLens, lens == nil {
+            return "The camera has not reported its active lens."
+        }
+        let permit = VoiceCommandPermit {
+            voiceControl.preferences.allows(command, supportsLens: camera.supportsVoiceLens) &&
+                voiceControlTarget == target && session === camera &&
+                (!command.changesSettings || (!control.recordPending &&
+                    (command == .switchLens || camera.voiceOpticalLens == lens)))
+        }
+        let native = DJICommandAdmission(owner: owner, isCurrent: { arm.isCurrent && permit.isCurrent })
+        let admission = CommandDispatchAdmission(session: target.session, epoch: target.epoch,
+            isCurrent: { native.isCurrent },
+            submit: { command in await source.submit(command, admission: native) })
+        return await control.executeVoiceCommand(command, target: target, presets: cameraPresets,
+            admission: admission, switchLens: {
+                await camera.switchVoiceLens(admission: native)
+            })
+    }
+
     /// One remote press toggles recording like the Record button, without the phone-side
     /// confirmation (an unseen dialog would strand the take), as on OpenZCine. The shared owner has
     /// already debounced it; an unknown or pending record state sends nothing.
@@ -1098,6 +1170,12 @@ struct LinkExperience: View {
         }
         .onChange(of: model.shell.cover) { old, next in
             if old == .media, next != .media { model.session.endMediaBrowse() }
+            if old == .settings, next != .settings { model.resumeVoiceAfterSettings() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
+            .receive(on: DispatchQueue.main)) { note in
+            let type = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
+            if type == AVAudioSession.InterruptionType.began.rawValue { model.cancelSettingsVoiceResume() }
         }
         .ignoresSafeArea()
         // "1080p from camera": the camera's own picture replaces the monitor while it streams.
@@ -1170,7 +1248,10 @@ struct LinkExperience: View {
             if phase == .openingDatalink { LocalVPNNotice.app.noteIfActive() }
         }
         .onChange(of: scenePhase) { _, phase in
-            guard phase == .active else { return }
+            guard phase == .active else {
+                model.cancelSettingsVoiceResume()
+                return
+            }
             // Back from Settings: offer Connect again rather than guessing the hotspot is on.
             model.hotspotQuestion?.reaskOnReturn = false
             #if targetEnvironment(simulator)

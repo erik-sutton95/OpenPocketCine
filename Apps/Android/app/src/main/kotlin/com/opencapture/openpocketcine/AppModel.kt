@@ -4,6 +4,7 @@ import com.opencapture.opencine.appkit.MonitorOperatorSessionModel
 import androidx.compose.runtime.Composable
 import com.opencapture.opencine.appkit.MonitorCaptureField
 import com.opencapture.opencine.appkit.MonitorCapturePreferences
+import com.opencapture.opencine.appkit.MonitorVoicePreferences
 import com.opencapture.opencine.appkit.captureField
 import com.opencapture.opencine.cameracontrols.CaptureRefresh
 import com.opencapture.opencine.cameracontrols.CaptureSheetHost
@@ -19,6 +20,8 @@ import com.opencapture.opencine.dji.GimbalMoveEngine
 import com.opencapture.opencine.motion.GimbalWaypointSlot
 import com.opencapture.opencine.runtime.MonitorHDRDisplay
 import android.content.Context
+import android.os.Build
+import android.speech.SpeechRecognizer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -186,6 +189,9 @@ class AppModel(
     }
     /** The connected camera's exposure and white balance presets (Settings, Controls tab). */
     val cameraPresets = com.opencapture.opencine.appkit.CameraSettingsPresetsModel(OperatorPrefs.cameraPresets(appContext), shell)
+    val voicePreferences = if (liveStream != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+        SpeechRecognizer.isOnDeviceRecognitionAvailable(appContext)
+    ) MonitorVoicePreferences(appContext) else null
     var shellState by mutableStateOf(shell.state.value)
         private set
     init { scope.launch { shell.state.collect { shellState = it } } }

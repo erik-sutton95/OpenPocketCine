@@ -585,6 +585,27 @@ Camera Wi-Fi connect. If live view never starts after Wi-Fi joins, pause local
 VPNs and ad blockers or exclude this app
 ([Troubleshooting](../../guides/troubleshooting/)).
 
+## Voice Control
+
+On supported iPhones running iOS 26 or later, open **Settings → Controls → Voice Control** to
+choose which commands are allowed. Start and Stop have separate switches. In the Field Monitor,
+expand View Assist and tap **Voice**, the last tool. Allow microphone access when asked.
+Recognition runs on the iPhone after the English speech model downloads.
+
+The mic pauses while Settings is open and resumes when you return to the same live camera with
+the app still in the foreground. Locking the monitor, backgrounding the app or starting a live
+stream turns off listening.
+
+- “Camera, start” or “Camera, record” starts a clip.
+- “Camera, stop” ends the current clip.
+- With the camera idle, say “Camera, load three” for **Preset 3**. “Camera, preset three” also works.
+- “Camera, load next” and “Camera, load previous” follow the order shown in Settings from the
+  last successful recall. In a fresh session, next starts at the first preset and previous at
+  the last. The list does not wrap.
+- With a Pocket 4 Pro connected, enable **Switch lens** to use “Camera, switch lens” or “Camera,
+  change lens.” Either phrase switches between 1× and 3× when the camera is idle and the current
+  format and color profile allow the change. Switch out of D-Log2 before switching to 3×.
+
 ## Device requirements
 
 BLE, Local Network, and Hotspot Configuration do not work in the Simulator.

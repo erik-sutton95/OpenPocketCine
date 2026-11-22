@@ -8,6 +8,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- On supported iPhones and Android phones, arm Voice Control from the Field Monitor to start or
+  stop recording and recall presets on-device. Each action has its own switch. On iPhone,
+  Pocket 4 Pro can also switch between its 1× and 3× lenses by voice.
 - iOS: live streaming of the monitor's camera to Twitch, YouTube, Facebook, Instagram or a Custom
   server (plain `rtmp://` allowed there with a warning, for TikTok LIVE): Settings, Sharing, Live
   stream, then Go live over the picture. Camera Wi-Fi blocks it; a shared Wi-Fi network or the

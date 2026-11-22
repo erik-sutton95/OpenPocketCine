@@ -84,7 +84,10 @@ extension AppModel: LiveChromeHost {
     var liveFPS: String { session.liveFPS }
     var gimbalPanelOpen: Bool { liveGimbalPanel != .none }
     var multiviewBorrowed: Bool { session.isMultiviewBorrowed }
-    func openSettings() { shell.open(.settings) }
+    func openSettings() {
+        pauseVoiceForSettings()
+        shell.open(.settings)
+    }
     func openMedia() { shell.open(.media) }
     func resetFocusPoint() { session.resetFocusPoint() }
     func unlockAutoExposure() { session.unlockAutoExposure() }

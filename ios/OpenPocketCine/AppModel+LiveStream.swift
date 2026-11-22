@@ -16,7 +16,10 @@ extension AppModel {
                 source: { [weak self] in self?.liveStreamSource },
                 attachPicture: { [weak self] in self?.session.decoder.setCleanPictureTap($0) },
                 // No permission gate of its own: the plain system request, after Go live is confirmed.
-                microphoneAccess: LiveStreamHost.systemMicrophoneAccess,
+                microphoneAccess: { [weak self] in
+                    self?.voiceControl.disarm()
+                    return await LiveStreamHost.systemMicrophoneAccess()
+                },
                 camera: PocketCameraStreamSource(
                     camera: { [weak self] in self?.session.connectedCamera }, hostPath: SharedWiFiPath(),
                     release: { [weak self] in self?.releaseCameraForStream() ?? false },

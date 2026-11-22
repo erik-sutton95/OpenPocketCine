@@ -8,7 +8,7 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <!-- Live streaming sends the phone's microphone with the camera picture; asked at Go live. -->
+    <!-- Asked when the operator starts live streaming or arms Voice Control. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!-- Android 15+: drop the HDR panel boost while the screen is being recorded. -->
@@ -43,6 +43,12 @@
     <uses-feature
         android:name="android.hardware.vulkan.level"
         android:required="false" />
+
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
 
     <application
         android:icon="@mipmap/ic_launcher"
