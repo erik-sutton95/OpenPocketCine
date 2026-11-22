@@ -142,7 +142,7 @@ Hotspot setups.
 Pairing and live view need a real camera nearby. See the
 [iOS](https://opencapture.org/openpocketcine/docs/apps/ios/) and
 [Android](https://opencapture.org/openpocketcine/docs/apps/android/) guides and the
-[latest release notes](https://opencapture.org/openpocketcine/docs/releases/0-1-5/).
+[latest release notes](https://opencapture.org/openpocketcine/docs/releases/0-2-0/).
 
 ## In the press
 
