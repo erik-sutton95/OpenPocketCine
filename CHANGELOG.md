@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-22
+
+New version train after 0.1.8. The operator-facing iOS and Android lists are in the
+[0.2.0 release notes](handbook/src/content/docs/releases/0-2-0.md). Builds against OpenCine
+`4d043fc`.
+
 ### Added
 
 - iOS: live streaming of the monitor's camera to Twitch, YouTube, Facebook, Instagram or a Custom
@@ -13,6 +19,25 @@ All notable changes to this project are documented here. The format is based on
   stream, then Go live over the picture. Camera Wi-Fi blocks it; a shared Wi-Fi network or the
   phone's hotspot allows it. While the monitor is closed, a Live pill at the top shows the stream
   with Stop. Untested on hardware (discussion #54).
+- Android: the same live streaming (Live stream card on the Sharing tab, Go live on the monitor,
+  the Live pill with Stop at the app root). Untested on hardware.
+- Live stream quality: when the camera feed is below 1080p, the card offers **1080p upscaled**
+  beside **Camera feed**, on iOS and Android.
+- iOS, Pocket 4 Pro: **1080p from camera**. The camera publishes its own 1080p stream to the phone
+  over the phone's hotspot or a saved shared network, and Go live relays it. Pocket 4 and Pocket 3
+  stay hidden, and Android does not offer it yet.
+- Zoom panel: holding zoom opens one panel on the trailing edge with the current zoom, three
+  presets, a ramp key and a vertical ruler. Drag the ruler for smooth zoom (two decimals, a tick
+  every 0.1x); tap an empty preset or hold any preset to save the current zoom, tap a saved one to
+  go there. The ramp key opens a **Preset ramp** popup (Off, or 0.5 s steps up to 10 s). Replaces
+  the half-disc zoom dial on iOS and Android.
+- Go live sits under the timecode block (top right) and steps aside while the zoom panel is open.
+- **Camera presets** card, first on the Settings Controls tab: save the connected camera's exposure
+  and white balance under a name and recall them; recall reports what the camera skipped.
+- GUIDES options add **Action safe** and **Title safe**, each with a size, drawn inside the frame
+  lines on live view and playback.
+- Android: the photo viewer has the playback View Assist bar (peaking, false colour, zebra) with
+  the same options as clips.
 - The monitor's lock button also holds the screen rotation, upside-down landscape
   included, so a phone mounted inverted no longer flips when it is levelled (discussion #564).
 
@@ -20,9 +45,15 @@ All notable changes to this project are documented here. The format is based on
 
 - Pocket 4 Pro: digital zoom now reaches 18x (DJI's November 2026 firmware). On older firmware the
   camera stops at 12x and the zoom readout shows 12x (#645).
+- Android Multiview matches iPhone: toolbar order Layout, Camera, Fit, LUT; tile tally (`REC 01:05`,
+  `STBY`); the format line; a rejected record shows its note on the tile; and the settings popup
+  follows the iPhone order and keeps its editor across a record start or stop. iOS Multiview now
+  runs on OpenCine's shared Multiview screen with no visible change.
 
 ### Fixed
 
+- A Pocket 4 Pro that reports an unrecognized Wi-Fi role is switched to station mode once
+  instead of being refused by Wi-Fi or Hotspot setups and Multiview.
 - iOS AirPods head tracking no longer drives the gimbal in FPV or Direction Lock, where it
   jumped the gimbal toward its limit; Calibrate asks for Follow or Tilt locked instead.
 - When the gimbal is past the head tracking range, head tracking stops and says so instead
