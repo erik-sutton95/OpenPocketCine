@@ -176,7 +176,24 @@ final class CameraSession {
     @ObservationIgnored private var foregroundCheckTask: Task<Void, Never>?
     @ObservationIgnored private var foregroundGeneration = 0
     @ObservationIgnored private var statusStorage = CameraStatus()
-    @ObservationIgnored private(set) var cameraReportedCapture = CameraStatus()
+    @ObservationIgnored private(set) var cameraReportedCapture = CameraStatus() {
+        didSet {
+            let lens = Self.voiceLens(in: cameraReportedCapture, dualLens: cameraModel?.isPocket4Pro == true)
+            if voiceOpticalLens != lens { voiceOpticalLens = lens }
+        }
+    }
+    enum OpticalLens {
+        case wide, tele
+
+        var otherVoiceLens: VoiceCommand.Lens { self == .wide ? .tele : .wide }
+    }
+    private(set) var voiceOpticalLens: OpticalLens?
+    var supportsVoiceLens: Bool { cameraModel?.isPocket4Pro == true }
+
+    nonisolated static func voiceLens(in reported: CameraStatus, dualLens: Bool) -> OpticalLens? {
+        guard dualLens, let raw = reported.zoomLens, raw > 0 else { return nil }
+        return raw >= CamFov.lens3x ? .tele : .wide
+    }
     @ObservationIgnored private var lastStatusMutation: CFAbsoluteTime = 0
     @ObservationIgnored private var statusFlushTask: Task<Void, Never>?
 
@@ -2366,6 +2383,59 @@ final class CameraSession {
     func refreshAudioState() async {
         cameraSettings.refreshAudio()
         await cameraSettings.waitForPending()
+    }
+
+    func switchVoiceLens(admission: DJICommandAdmission) async -> String {
+        let reported = cameraReportedCapture
+        guard let sourceLens = Self.voiceLens(in: reported, dualLens: supportsVoiceLens) else {
+            return "The camera has not reported its active lens."
+        }
+        let lens = sourceLens.otherVoiceLens
+        let factor: Double = lens == .wide ? 1 : 3
+        let label = lens.label
+        guard admission.admits(commandOwner), !controlBusy, !gimbalMoveRunning, !editorReconciliation.hasFormat,
+            zoomPinchPreview == nil, zoomOptimistic == nil, !zoomColor.snapshot.hopPending,
+            !zoomColor.snapshot.restoreOnWide, zoomColor.snapshot.pendingFactor == nil,
+            status.shootingMode == reported.shootingMode, status.videoFormat == reported.videoFormat,
+            status.colorMode == reported.colorMode
+        else { return "The \(label) is unavailable in the current camera settings." }
+        if CamFov.colorMode(forZoom: factor, current: reported.colorMode) != nil {
+            return "Switch out of D-Log2 before using the 3× lens."
+        }
+        guard let position = Self.voiceLensPosition(lens, model: cameraModel, reported: reported) else {
+            return "The \(label) is unavailable in the current camera settings."
+        }
+        // Use the manual zoom-stop owner for admission and readout updates. The guards above
+        // exclude commands that would change format or switch the color profile.
+        let sourcePermit = VoiceCommandPermit { voiceOpticalLens == sourceLens }
+        let write = DJICommandAdmission(owner: admission.owner) { admission.isCurrent && sourcePermit.isCurrent }
+        var stage: ControlWireEvent?
+        setZoom(factor, admission: write) { stage = $0 }
+        let deadline = ContinuousClock.now + .milliseconds(2500)
+        while admission.isCurrent, !Task.isCancelled, ContinuousClock.now < deadline {
+            if stage == .notSent { return "The lens command was not sent." }
+            if stage == .refused { return "The camera refused the lens change." }
+            let current = cameraReportedCapture
+            if current.zoomLens == position, current.videoFormat == reported.videoFormat,
+                current.shootingMode == reported.shootingMode, current.colorMode == reported.colorMode
+            {
+                return lens.confirmation
+            }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        return "The camera did not confirm the \(label)."
+    }
+
+    nonisolated static func voiceLensPosition(_ lens: VoiceCommand.Lens, model: CameraModel?,
+        reported: CameraStatus) -> UInt16?
+    {
+        let factor: Double = lens == .wide ? 1 : 3
+        guard let model, model.isPocket4Pro, reported.recordingReported, !reported.isRecording, !reported.isPhoto,
+            let format = reported.videoFormat, let color = reported.colorMode, let current = reported.zoomLens,
+            current > 0, model.activeZoomStops(resolution: format.resolution, shootingMode: reported.shootingMode).contains(factor),
+            CamFov.colorMode(forZoom: factor, current: color) == nil
+        else { return nil }
+        return lens == .wide ? CamFov.lens1x : CamFov.lens3x
     }
 
     /// `0x02/0x18` via `Commands.setVideoFormat(resolution:frameRate:)`.

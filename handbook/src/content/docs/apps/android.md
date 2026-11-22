@@ -317,6 +317,23 @@ feed. If live view cannot return, bounded connection recovery takes over. Please
 test repeated browsing, playback and return with a connected camera; physical
 qualification of this follow-up is still pending.
 
+## Voice Control
+
+On Android 12 or later with an on-device speech service, open **Operator Setup → Controls →
+Voice Control** to choose which commands are allowed. In the Field Monitor, expand View Assist
+and tap **Voice**, the last tool. Allow microphone access when asked. Commands use on-device
+English recognition. If the speech service ends listening, tap **Voice** to resume.
+
+- “Camera, start” or “Camera, record” starts a clip.
+- “Camera, stop” ends the current clip.
+- With the camera idle, say “Camera, load three” for **Preset 3**, or “Camera, load next” and
+  “Camera, load previous” to step through presets in the order shown in Settings. In a fresh
+  session, next starts at the first preset and previous at the last. The list does not wrap.
+
+Listening pauses in Operator Setup and resumes on return to the same live camera. Locking the
+monitor, backgrounding the app or starting a live stream turns off listening. Use the monitor's
+zoom control to change optical lenses on Pocket 4 Pro.
+
 ## How Swift reaches Android
 
 Business logic stays in `OpenPocketViewCore`. Android follows the OpenZCine

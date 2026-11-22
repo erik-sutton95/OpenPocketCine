@@ -29,6 +29,8 @@ struct SettingsRootView: View {
             preferences: OperatorPrefs.common, display: OperatorPrefs.display, assist: model.assist,
             library: model.session.mediaLibrary, operatorSession: model.operatorSession,
             configuration: configuration.withCameraPresets(model.cameraPresets)
+                .withVoiceControl(MonitorVoiceControl.supported ? model.voiceControl.preferences : nil,
+                    supportsLens: model.session.supportsVoiceLens)
                 .withLiveStream(model.liveStream))
     }
 

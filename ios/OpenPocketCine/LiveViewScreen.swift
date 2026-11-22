@@ -12,6 +12,10 @@ typealias LiveViewScreen = MonitorOperatorLiveScreen<AppModel>
 extension AppModel: MonitorLiveScreenHost {
     static func headphoneBridge() -> HeadphoneMotionBridge { .appBridge() }
     var liveCapabilities: MonitorLayoutCapabilities { OsmoMonitorPresentation.capabilities(session) }
+    var liveVoiceControl: MonitorVoiceTool? {
+        .init(control: voiceControl, target: voiceMonitorTarget, supportsLens: session.supportsVoiceLens,
+            execute: executeVoiceCommand)
+    }
     var liveZoomCaption: String { OsmoMonitorPresentation.zoomCaption(session) }
     var simulatorLiveColorMode: ColorMode? {
         #if targetEnvironment(simulator)

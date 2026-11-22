@@ -87,6 +87,7 @@ internal fun operatorSetupApp(model: AppModel) = OperatorSetupApp(
         key(shell.monitor?.id) { com.opencapture.opencine.cameracontrols.monitorSettingsCacheSource(model.mediaController().library, model.mediaCacheRoot) }
     },
     cameraPresets = model.cameraPresets,
+    voicePreferences = model.voicePreferences,
     liveStream = { com.opencapture.opencine.appkitnative.liveStreamSettingsSource(model.liveStream?.coordinator) },
 )
 

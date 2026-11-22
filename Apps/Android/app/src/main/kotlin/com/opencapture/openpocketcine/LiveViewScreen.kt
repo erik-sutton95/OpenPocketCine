@@ -8,6 +8,10 @@ import com.opencapture.opencine.appkitnative.MonitorFaceReadbackEpoch
 import com.opencapture.opencine.core.ConnectionState
 import com.opencapture.opencine.dji.PocketCameraSession
 import com.opencapture.opencine.appkitnative.LiveStreamOverlay
+import com.opencapture.opencine.appkitnative.rememberMonitorVoiceTool
+import com.opencapture.opencine.appkit.VoiceControlTarget
+import com.opencapture.opencine.appkit.ShellModel
+import com.opencapture.monitorui.isRunning
 
 
 import com.opencapture.opencine.cameracontrols.*
@@ -63,6 +67,23 @@ internal fun monitorLiveFeedSource(sessionOwner: () -> PocketCameraSession): Mon
 @Composable
 fun LiveViewScreen(model: AppModel) {
     val cover = model.shellState.cover
+    val voiceStream = model.liveStream?.coordinator
+    val voicePreferences = model.voicePreferences
+    val voice = if (voicePreferences != null && voiceStream != null) {
+        val stream by voiceStream.state.collectAsState()
+        val controls by model.control.state.collectAsState()
+        val settingsOpen = cover == ShellModel.Cover.SETTINGS
+        val available = (cover == null || settingsOpen) &&
+            model.voiceControlAvailable(allowSettings = true) && !stream.phase.isRunning
+        rememberMonitorVoiceTool(
+            target = VoiceControlTarget.from(controls.snapshot).takeIf { available },
+            stream = voiceStream,
+            preferences = voicePreferences,
+            settingsOpen = settingsOpen,
+            canListen = { model.voiceControlAvailable() },
+            execute = model::executePocketVoiceCommand,
+        )
+    } else null
     val status by model.session.chromeStatus.collectAsState()
     val capabilities = model.monitorLayout()
     val cameraGalleryOpen by model.session.cameraGalleryOpen.collectAsState()
@@ -121,7 +142,7 @@ fun LiveViewScreen(model: AppModel) {
                 model.gimbalGamepad.noteBlocked(model)
                 model.endGimbalStick()
                 if (reason == MonitorInputBlock.LOCK) session.cancelProgrammedMove()
-            }, modifier = modifier, picture = picture)
+            }, modifier = modifier, voice = voice, picture = picture)
         // Go live, its status, notice and warnings under the timecode block (top right); they
         // step aside while the zoom ruler is open.
         model.liveStream?.let { LiveStreamOverlay(it.coordinator, hidden = chrome.session.zoomDialOpen) }
