@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- iOS: long freezes while live (Sentry OPENPOCKETCINE-IOS-4Z, -50). Status messages from the
+  camera now reach the screen in one batch instead of one at a time, gimbal debug text is only
+  built when the diagnostics read it, and each video frame reads the assist settings once
+  (OpenCine #398).
+- Camera Wi-Fi after a Wi-Fi or Hotspot setup on newer Pocket 4 and Pocket 4 Pro firmware: the
+  app no longer waits about 15 s for the camera's access point role, it moves on once the role is
+  stable (OpenCine #399).
+
 ## [0.2.0] - 2026-11-22
 
 New version train after 0.1.8. The operator-facing iOS and Android lists are in the
