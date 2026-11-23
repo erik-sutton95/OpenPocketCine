@@ -1,4 +1,5 @@
 import Foundation
+import MonitorPresentation
 import OpenCineApple
 import OpenCineCameraControls
 import OpenCineMedia
@@ -44,7 +45,20 @@ final class HevcDecoder: OpenCineApple.MonitorLiveVideoDecoder {
 
 /// The app keeps its existing operator-selected footage namespace and source interpretation.
 enum SimulatorLiveFeed {
+    #if DEBUG && targetEnvironment(simulator)
+        static var referenceReviewClipURL: URL? {
+            guard let review = ReviewLaunch.current,
+                review.screen == .live, review.state == "reference-split"
+            else { return nil }
+            return FileManager.default.temporaryDirectory
+                .appendingPathComponent("ReferenceSplitLive.mov")
+        }
+    #endif
+
     static var clipURL: URL? {
+        #if DEBUG && targetEnvironment(simulator)
+            if let fixture = referenceReviewClipURL { return fixture }
+        #endif
         let env = ProcessInfo.processInfo.environment["OPV_SIM_FEED_CLIP"]
         let stored = UserDefaults.standard.string(forKey: "OPV.SimFeedClipPath")
         guard let path = [env, stored].compactMap({ $0 }).first(where: { !$0.isEmpty }) else {

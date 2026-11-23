@@ -253,7 +253,22 @@ import OpenCineDJIApple
                         model.shell.open(.media)
                     }
                 #endif
-            case .cameras, .pair, .live: break
+            case .live:
+                #if DEBUG
+                    if let clip = SimulatorLiveFeed.referenceReviewClipURL {
+                        Task {
+                            do {
+                                if !FileManager.default.fileExists(atPath: clip.path) {
+                                    try await ReviewClip.write(to: clip)
+                                }
+                                model.session.decoder.startSimulatorSampleIfNeeded()
+                            } catch {
+                                assertionFailure("Could not stage the reference review picture: \(error)")
+                            }
+                        }
+                    }
+                #endif
+            case .cameras, .pair: break
             }
         }
 
