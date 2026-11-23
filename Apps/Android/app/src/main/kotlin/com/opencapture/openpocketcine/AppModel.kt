@@ -94,6 +94,7 @@ class AppModel(
     val reviewLaunch: com.opencapture.monitorui.ReviewLaunch? = null,
 ) : GamepadHost, GimbalChromeHost, CaptureSheetHost, OperatorSetupModel, AutoCloseable {
     private val appContext = context.applicationContext
+    internal val monitorReferenceStore = com.opencapture.opencine.appkitnative.MonitorReferenceStore(appContext)
     /** One actual cache root/lifetime shared by gallery IO and operator settings. */
     val mediaCacheRoot = com.opencapture.opencine.appkit.MonitorMediaCacheRoot(
         java.io.File(appContext.noBackupFilesDir, "OpenPocketCine/media"))

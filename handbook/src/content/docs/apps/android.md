@@ -226,6 +226,22 @@ picture. Mirror changes only the display: recordings and scopes stay
 unflipped, and Vertical leaves the joystick directions unchanged. Video
 playback uses the same axes with its own on/off choice.
 
+## Reference frame
+
+Expand the View Assist tray in Live View and tap **REF** to save your first
+live frame. You can also pause a video in Media and choose **Use as Reference**.
+That turns on the comparison when you return to a compatible live picture.
+The app keeps one reference on this phone after a restart or camera reconnect.
+Saving again asks you to replace it.
+
+Tap **REF** to show or hide a saved reference. Touch and hold it to open the
+options. **Blend** starts at 50% opacity. In **Split**, choose **Left** or
+**Right** for the reference and drag the divider to change how much of each
+image you see. Split starts at 100% opacity. Lower it to see the live picture
+through the reference on the chosen side. Each mode keeps its own opacity.
+If the framing differs, match the aspect and desqueeze or replace the
+reference. The comparison appears in Live View only.
+
 ## Level
 
 Enable **LEVEL** in View Assist to see how level the picture is against

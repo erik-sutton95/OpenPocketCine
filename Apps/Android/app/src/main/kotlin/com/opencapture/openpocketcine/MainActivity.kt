@@ -58,6 +58,7 @@ import com.opencapture.openpocketcine.multiview.MultiviewQualificationPolicy
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.opencapture.opencine.appkit.AppShell
+import com.opencapture.opencine.appkitnative.LocalMonitorReferenceStore
 import com.opencapture.opencine.appkit.ShellBrand
 import com.opencapture.opencine.appkit.ShellActions
 import com.opencapture.opencine.appkit.PairingWizard
@@ -91,11 +92,13 @@ open class MainActivity : ComponentActivity() {
         remoteShutter = MonitorRemoteShutter(applicationContext, "OpenPocketCineRemoteShutter")
         launch.setContent(this) {
             OpenPocketCineTheme {
+                LaunchedEffect(model) { model.monitorReferenceStore.load() }
                 val haptics = rememberOperatorHaptics { model.hapticsEnabled }
                 // One app-scoped delivery owner: a run outlives the media screen that began it.
                 val delivery = rememberMonitorDeliveryCoordinator()
                 CompositionLocalProvider(LocalOperatorHaptics provides haptics, LocalMonitorDeliveryCoordinator provides delivery,
-                    LocalMonitorRemoteShutter provides remoteShutter) {
+                    LocalMonitorRemoteShutter provides remoteShutter,
+                    LocalMonitorReferenceStore provides model.monitorReferenceStore) {
                     OpenPocketCineApp(model)
                     // While a stream runs the screen stays awake; leaving the app ends it with a
                     // restart offer. Here at the root, not in Live View, so it holds when the

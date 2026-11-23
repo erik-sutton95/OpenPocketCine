@@ -165,7 +165,11 @@ struct PocketPlaybackLook: Equatable, Sendable {
     private let model: AppModel
     init(model: AppModel) {
         self.model = model
-        presentation = .init(makeFeed: { PlaybackFeedSession() }, audioSession: model.playbackAudioSession,
+        presentation = .init(makeFeed: {
+            let feed = PlaybackFeedSession()
+            feed.referenceCaptureEnabled = model.referenceStore != nil
+            return feed
+        }, audioSession: model.playbackAudioSession,
             samples: { model.frameSamples }, projectEffects: { $0.playbackFrameEffects },
             onTapFailure: MediaPlaybackAudioSession.tapFailure,
             onAudioFailure: MediaPlaybackAudioSession.audioFailure)
