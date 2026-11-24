@@ -51,8 +51,11 @@ targets:
         product: OpenCineMotion
       - package: OpenCine
         product: OpenCineRelay
+      # The OpenCine dock's module host and webcam output: Mac Catalyst only, so the iOS app
+      # does not link it.
       - package: OpenCine
         product: OpenCineVirtualCamera
+        destinationFilters: [macCatalyst]
       - package: OpenCine
         product: OpenCineRelayApple
       - package: OpenCine
