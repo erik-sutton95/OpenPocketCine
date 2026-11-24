@@ -120,18 +120,31 @@ extension AppModel {
     /// the still-looking hint once a scan turns up nothing), the session's live label, a Bluetooth
     /// failure, the camera Wi-Fi joined and a local VPN.
     func pairingWizard() -> PairingWizard {
-        PairingWizard(
-            bodies: [
+        #if targetEnvironment(macCatalyst)
+            // The Mac cannot join the camera's Wi-Fi: the camera joins the Mac's network.
+            let bodies = [
+                "Turn the camera on and keep it near this Mac. Pocket and Nano both appear. Choose the one you want.",
+                "If the camera shows Approve, tap it on that camera's screen. First-time pairing can wait up to 90 seconds.",
+                "",  // The shared wizard words the Mac's network step.
+                "Exposure, LUTs and scopes go live as soon as the video link is up.",
+            ]
+            let joinLines = ["Leave the camera on", "Joining a network can take about a minute; we keep trying"]
+        #else
+            let bodies = [
                 "Turn the camera on and keep the phone nearby. Pocket and Nano both appear. Choose the one you want.",
                 "If the camera shows Approve, tap it on that camera's screen. First-time pairing can wait up to 90 seconds.",
                 "We read the camera's network over Bluetooth, then join its Wi-Fi for you.",
                 "Exposure, LUTs and scopes go live as soon as the video link is up.",
-            ],
-            approveLines: ["Look for an Approve / pairing prompt", "Tap it on the camera screen"],
-            joinLines: [
+            ]
+            let joinLines = [
                 "Leave the camera on. It brings up its own Wi-Fi",
                 "On 5.8 GHz that can take about a minute; we keep trying",
-            ],
+            ]
+        #endif
+        return PairingWizard(
+            bodies: bodies,
+            approveLines: ["Look for an Approve / pairing prompt", "Tap it on the camera screen"],
+            joinLines: joinLines,
             choosing: cameras.scanLooksEmpty
                 ? .init(
                     title: StartupConnectionCopy.scanEmptyTitle, icon: .camera,
@@ -141,6 +154,35 @@ extension AppModel {
             label: liveLabel,
             discoveryFailure: discoveryFailure, joinedNetwork: session.joinedSSID,
             vpnActive: LocalVPNProbe.isActive())
+    }
+
+    /// The wizard with its actions on the pair page. On the Mac, Continue joins the camera to the
+    /// camera network (asked once) and the page shows that network with Change network.
+    func pairingFlow() -> IntegrationPairingFlow {
+        let wizard = pairingWizard()
+        let done = { [weak self] in self?.shell.endPairing() ?? () }
+        let rescan = { [weak self] in self?.session.startScan() ?? () }
+        #if targetEnvironment(macCatalyst)
+            return wizard.flow(
+                cameras, host: .mac, stationNetwork: cameraNetwork.network,
+                connect: { [weak self] in self?.pair($0) },
+                content: AnyView(
+                    CameraNetworkPairingView(
+                        pairing: cameraNetwork, model: cameras, brand: PocketStationNetwork.brand,
+                        services: PocketStationNetwork.services)),
+                onDone: done, rescan: rescan)
+        #else
+            return wizard.flow(cameras, onDone: done, rescan: rescan)
+        #endif
+    }
+
+    /// Pairs a nearby camera: its own Wi-Fi on iPhone and iPad, the camera network on the Mac.
+    func pair(_ sighting: CamerasModel.Sighting) {
+        #if targetEnvironment(macCatalyst)
+            Task { await cameraNetwork.pair(sighting, in: cameras) }
+        #else
+            cameras.connect(sighting)
+        #endif
     }
 
     /// Main's live label: the scan while choosing, then the session's phase (a connect starts at

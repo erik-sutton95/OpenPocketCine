@@ -6,6 +6,8 @@ import MonitorUI
 import Observation
 import OpenCineAppKit
 import OpenCineCameraControls
+import enum OpenCineCore.HostDevice
+import enum OpenCineCore.StationCopy
 #if targetEnvironment(macCatalyst)
     import struct OpenCineCore.CameraHotspotHost
 #else
@@ -4935,6 +4937,14 @@ final class CameraSession {
         case hostWiFi(String)
         case stationCameraMissing(String)
         case nanoWake
+
+        /// The Mac module's words when the camera joined `network` but the Mac cannot reach it:
+        /// the shared station words, plus the Wi-Fi 7 quirk of the Pocket 4 Pro.
+        static func macStationCameraMissing(_ network: String) -> String {
+            StationCopy.notFoundOnNetwork(network, host: .mac)
+                + " On a Wi-Fi 7 router, turn off MLO for this network (or use a network without it)."
+        }
+
         var errorDescription: String? {
             switch self {
             case .creds: "couldn't read the camera's Wi-Fi credentials"
@@ -4956,10 +4966,16 @@ final class CameraSession {
                 "Bluetooth reached a different camera than the one you tapped. Pocket and Nano are separate — pick the Nano or Pocket row in the list."
             case .setupNotSaved:
                 "this setup's password is missing on this device. Edit the setup and enter it again"
-            case .hostWiFi:
-                "this iPhone could not join the Wi-Fi. Check the password and that the network is in range"
-            case .stationCameraMissing:
-                "the camera joined the Wi-Fi, but this iPhone cannot reach it there. The router is keeping the two apart: on a Wi-Fi 7 router turn off MLO for this network (or add a camera network without it), and turn off client isolation. The Hotspot setup avoids the router"
+            #if targetEnvironment(macCatalyst)
+                // The Mac never joins: it is on the network by Wi-Fi or Ethernet.
+                case .hostWiFi: StationCopy.noStationNetwork
+                case .stationCameraMissing(let network): Self.macStationCameraMissing(network)
+            #else
+                case .hostWiFi:
+                    "this iPhone could not join the Wi-Fi. Check the password and that the network is in range"
+                case .stationCameraMissing:
+                    "the camera joined the Wi-Fi, but this iPhone cannot reach it there. The router is keeping the two apart: on a Wi-Fi 7 router turn off MLO for this network (or add a camera network without it), and turn off client isolation. The Hotspot setup avoids the router"
+            #endif
             case .nanoWake:
                 "the Nano did not confirm its Wi-Fi wake. Keep it powered on and try again"
             }

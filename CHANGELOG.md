@@ -13,6 +13,11 @@ All notable changes to this project are documented here. The format is based on
   its clean picture to the dock's webcam input. Its window carries the dock's camera tabs in the
   title bar and moves like any Mac window (needs OpenCine 0.2.0). Not released yet: it waits for the hardware pass
   and Developer ID signing. The iOS and Android apps are unchanged (OpenCine #403).
+- Mac: pairing a Pocket or Nano moves the camera onto the Mac's network (a router or venue
+  Wi-Fi the Mac reaches by Wi-Fi or Ethernet) instead of the camera's own Wi-Fi, which a Mac
+  cannot join. The network and its password are asked for once and reused for every camera
+  after that, with Change network on the pair page. The iOS and Android apps are unchanged
+  (OpenCine #403).
 
 ### Fixed
 

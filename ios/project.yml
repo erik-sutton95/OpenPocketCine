@@ -166,6 +166,8 @@ targets:
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "OpenPocketCine uses the microphone for the sound of a live stream you start."
         # iOS names the current Wi-Fi only to apps with precise location (Add setup › Wi-Fi).
         INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "OpenPocketCine uses your location only so iOS can tell it which Wi-Fi this iPhone is on, to offer that network when you add a camera's Wi-Fi setup. Your location is not stored or shared."
+        # The Mac module offers the Mac's Wi-Fi as the network new cameras join.
+        "INFOPLIST_KEY_NSLocationWhenInUseUsageDescription[sdk=macosx*]": "OpenPocketCine uses your location only so macOS can tell it which Wi-Fi this Mac is on, to offer that network when you pair a camera. Your location is not stored or shared."
         INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking: YES
         INFOPLIST_KEY_NSLocalNetworkUsageDescription: "OpenPocketCine connects to cameras over local Wi-Fi to receive video and control them, and can share the live picture with nearby OpenPocketCine phones."
         INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: "OpenPocketCine saves clips you choose to Photos."

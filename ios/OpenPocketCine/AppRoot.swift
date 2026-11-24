@@ -41,6 +41,11 @@ final class AppModel {
     #endif
     /// A saved hotspot connect waiting for the operator to turn Personal Hotspot on.
     var hotspotQuestion: HotspotQuestion?
+    #if targetEnvironment(macCatalyst)
+        /// The network new cameras join on the Mac: asked for once, then reused (a Mac cannot join a
+        /// camera's own Wi-Fi). Its password stays in `MultiviewNetworkStore`.
+        let cameraNetwork: CameraNetworkPairing
+    #endif
     /// Live streaming (the shared OpenCine coordinator); only the app's root model streams.
     private(set) var liveStream: LiveStreamCoordinator?
 
@@ -76,6 +81,13 @@ final class AppModel {
                 ] : [],
             store: Self.camerasStore(defaults))
         shell = ShellModel(cameras: cameras, control: control)
+        #if targetEnvironment(macCatalyst)
+            cameraNetwork = CameraNetworkPairing(
+                store: CameraNetworkStore(defaults: defaults, key: "desktop.cameraNetwork"),
+                password: { MultiviewNetworkStore.load(ssid: $0, hotspot: false)?.password },
+                savePassword: { MultiviewNetworkStore.save(ssid: $0.ssid, password: $0.password, hotspot: false) },
+                currentNetwork: { await DjiAppleWiFiJoiner.currentSSID() })
+        #endif
         cameraPresets = CameraSettingsPresetsModel(store: CameraSettingsPresetStore(storage: defaults), shell: shell)
         // The save rules a DJI record follows: another camera's network is never saved with
         // this one, and a setup that moves the camera is remembered before it moves it.
@@ -1103,11 +1115,10 @@ struct LinkExperience: View {
                 pair: {
                     model.shell.beginPairing()
                     if let sighting = model.cameras.nearby.first(where: { $0.id == model.cameras.selection }) {
-                        model.cameras.connect(sighting)
+                        model.pair(sighting)
                     }
                 }),
-            pairingFlow: model.pairingWizard().flow(
-                model.cameras, onDone: { model.shell.endPairing() }, rescan: { model.session.startScan() }),
+            pairingFlow: model.pairingFlow(),
             coverPresentation: .shell
         ) { _ in
             LiveViewScreen()
