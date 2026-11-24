@@ -10,7 +10,8 @@ All notable changes to this project are documented here. The format is based on
 
 - Mac: the app builds for Mac Catalyst as the Pocket camera module of the OpenCine desktop app
   (`just macos-build`, manifest in `macos/module.json`). Started by the OpenCine dock, it feeds
-  its clean picture to the dock's webcam input. Not released yet: it waits for the hardware pass
+  its clean picture to the dock's webcam input. Its window carries the dock's camera tabs in the
+  title bar and moves like any Mac window (needs OpenCine 0.2.0). Not released yet: it waits for the hardware pass
   and Developer ID signing. The iOS and Android apps are unchanged (OpenCine #403).
 
 ### Fixed
