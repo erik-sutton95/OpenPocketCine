@@ -8,7 +8,13 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
-- Mac: the app builds for Mac Catalyst as the Pocket camera module of the OpenCine desktop app
+- Mac: in the dock the camera window works like a desktop app. The title bar is a toolbar with
+  the tabs, the take (STBY or REC and the timecode), and real Media and Settings buttons. One status
+  row under it shows link, battery, card, format, log profile, mode and audio, and the picture starts
+  below it. There is no interface lock on the Mac. Keys: ⌘R record, ⌘, settings, ⌘⇧M media,
+  ⌘1 to ⌘9 a tab, ⌃⇥ and ⌃⇧⇥ the next and previous tab, D the display overlays. Its tab is named Osmo (was Pocket); the webcam input keeps its name. The iOS
+  and Android apps are unchanged (OpenCine #403).
+- Mac: the app builds for Mac Catalyst as the Osmo camera module of the OpenCine desktop app
   (`just macos-build`, manifest in `macos/module.json`). Started by the OpenCine dock, it feeds
   its clean picture to the dock's webcam input. Its window carries the dock's camera tabs in the
   title bar and moves like any Mac window (needs OpenCine 0.2.0). Not released yet: it waits for the hardware pass
