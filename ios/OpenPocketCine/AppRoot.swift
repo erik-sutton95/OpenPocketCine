@@ -86,7 +86,8 @@ final class AppModel {
                 store: CameraNetworkStore(defaults: defaults, key: "desktop.cameraNetwork"),
                 password: { MultiviewNetworkStore.load(ssid: $0, hotspot: false)?.password },
                 savePassword: { MultiviewNetworkStore.save(ssid: $0.ssid, password: $0.password, hotspot: false) },
-                currentNetwork: { await DjiAppleWiFiJoiner.currentSSID() })
+                // A Mac names its Wi-Fi only through CoreWLAN (OpenCine's ComputerWiFi).
+                currentNetwork: { await ComputerWiFi.currentNetwork() })
         #endif
         cameraPresets = CameraSettingsPresetsModel(store: CameraSettingsPresetStore(storage: defaults), shell: shell)
         // The save rules a DJI record follows: another camera's network is never saved with
