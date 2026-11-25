@@ -126,6 +126,9 @@ targets:
         SUPPORTS_MACCATALYST: YES
         DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: NO
         "PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*]": com.opencapture.openpocketcine.module
+        # Optimize Interface for Mac (device family 6): points map 1:1 and text shows at its real
+        # size, instead of the whole window scaled to 77 % as an iPad. iOS keeps "1,2".
+        "TARGETED_DEVICE_FAMILY[sdk=macosx*]": "2,6"
         "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": OpenPocketCine/OpenPocketCine-Mac.entitlements
         "ENABLE_APP_SANDBOX[sdk=macosx*]": YES
         GCC_PREPROCESSOR_DEFINITIONS: "$(inherited) CI_SILENCE_GL_DEPRECATION=1"

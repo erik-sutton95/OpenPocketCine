@@ -8,6 +8,12 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Mac: the module runs optimized for Mac, so text and controls show at normal Mac size instead of
+  the whole window scaled to 77 %. In the dock the picture is centred below the status row with no
+  dark band above it, a window stays at least 800 by 600, and the scroll wheel steps ISO, shutter,
+  WB and the other dial settings while the pointer rests on one or its popup is open (a mouse
+  detent is one step, a trackpad steps every short distance, down or right is the next value; a
+  fast spin sends the latest value). The iOS and Android apps are unchanged (OpenCine #403).
 - Mac: in the dock the camera window works like a desktop app. The title bar is a toolbar with
   the tabs, the take (STBY or REC and the timecode), and real Media and Settings buttons. One status
   row under it shows link, battery, card, format, log profile, mode and audio, and the picture starts
