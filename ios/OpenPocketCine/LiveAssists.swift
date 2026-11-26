@@ -326,18 +326,22 @@ struct AssistToolRow: View {
                     }
                     .buttonStyle(.monitorTapTarget)
                     .simultaneousGesture(
-                        LongPressGesture(minimumDuration: 0.25).onEnded { _ in
-                            guard !isLocked, tool.hasConfiguration else { return }
-                            assist.configureTool = tool
-                            if tool == .lut { assist.showLUTPicker = false }
-                        }
+                        LongPressGesture(minimumDuration: 0.25).onEnded { _ in configure(tool) }
                     )
+                    // A Mac's right-click opens the tool's options, as the long press does.
+                    .monitorSecondaryClick { configure(tool) }
                 }
             }
             .padding(.horizontal, 2)
         }
         .monitorScrollFade(.horizontal)
         .allowsHitTesting(!isLocked)
+    }
+
+    private func configure(_ tool: MonitorAssistSelection) {
+        guard !isLocked, tool.hasConfiguration else { return }
+        assist.configureTool = tool
+        if tool == .lut { assist.showLUTPicker = false }
     }
 }
 
