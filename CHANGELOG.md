@@ -6,6 +6,33 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- Mac: the module runs optimized for Mac, so text and controls show at normal Mac size instead of
+  the whole window scaled to 77 %. In the dock the picture is centred below the status row with no
+  dark band above it, a window stays at least 800 by 600, and the scroll wheel steps ISO, shutter,
+  WB and the other dial settings while the pointer rests on one or its popup is open (a mouse
+  detent is one step, a trackpad steps every short distance, down or right is the next value; a
+  fast spin sends the latest value). The iOS and Android apps are unchanged (OpenCine #403).
+- Mac: in the dock the camera window works like a desktop app. The title bar is a toolbar with
+  the tabs, the take (STBY or REC and the timecode), and real Media and Settings buttons. One status
+  row under it shows link, battery, card, format, log profile, mode and audio, and the picture starts
+  below it. There is no interface lock on the Mac. Keys: ⌘R record, ⌘, settings, ⌘⇧M media,
+  ⌘1 to ⌘9 a tab, ⌃⇥ and ⌃⇧⇥ the next and previous tab, D the display overlays. Its tab is named Osmo (was Pocket); the webcam input keeps its name. The iOS
+  and Android apps are unchanged (OpenCine #403).
+- Mac: the app builds for Mac Catalyst as the Osmo camera module of the OpenCine desktop app
+  (`just macos-build`, manifest in `macos/module.json`). Started by the OpenCine dock, it feeds
+  its clean picture to the dock's webcam input. Its window carries the dock's camera tabs in the
+  title bar and moves like any Mac window (needs OpenCine 0.2.0). Not released yet: it waits for the hardware pass
+  and Developer ID signing. The iOS and Android apps are unchanged (OpenCine #403).
+- Mac: pairing a Pocket or Nano moves the camera onto the Mac's network (a router or venue
+  Wi-Fi the Mac reaches by Wi-Fi or Ethernet) instead of the camera's own Wi-Fi, which a Mac
+  cannot join. The network and its password are asked for once and reused for every camera
+  after that, with Change network on the pair page. The iOS and Android apps are unchanged
+  (OpenCine #403). The network page names the Mac's current Wi-Fi and the networks it sees
+  nearby (Location allowed); with nothing to list, Other network is its first row and a line
+  says why.
+
 ### Fixed
 
 - iOS: long freezes while live (Sentry OPENPOCKETCINE-IOS-4Z, -50). Status messages from the

@@ -27,7 +27,7 @@ enum PocketAddSetup {
         camera: SavedCamera, done: @escaping (RouteDraft?) -> Void, initialSelection: String? = nil
     ) -> AddSetupFlow {
         AddSetupFlow(
-            chooser: StationNetworkSetupRules.setupChooser(context: .camera(camera)),
+            chooser: chooser(camera),
             onSelect: { _ in },
             destination: { option in
                 AnyView(PocketSetupDestination(camera: camera, kind: option.kind, done: done))
@@ -36,9 +36,14 @@ enum PocketAddSetup {
     }
 
     static func selection(camera: SavedCamera, model: AppModel) -> String? {
-        CamerasMapping.addSetupSelection(
-            model.cameras, camera: camera,
-            chooser: StationNetworkSetupRules.setupChooser(context: .camera(camera)))
+        CamerasMapping.addSetupSelection(model.cameras, camera: camera, chooser: chooser(camera))
+    }
+
+    /// The shared chooser with the routes this device offers: a Mac has no hotspot of its own.
+    private static func chooser(_ camera: SavedCamera) -> AddSetupChooser {
+        StationNetworkSetupRules.setupChooser(
+            context: .camera(camera),
+            routes: StationSetupRoute.offered(on: .current, hostRoutes: StationSetupRoute.stationNetworks))
     }
 }
 

@@ -5,6 +5,9 @@ import Observation
 import OpenCineAppKit
 import OpenCineAppKitApple
 import OpenCineCameraControls
+#if targetEnvironment(macCatalyst)
+    import OpenCineVirtualCamera
+#endif
 import OpenCineCore
 import OpenCineFrameIO
 import OpenCineFrameIOApple
@@ -38,6 +41,11 @@ final class AppModel {
     #endif
     /// A saved hotspot connect waiting for the operator to turn Personal Hotspot on.
     var hotspotQuestion: HotspotQuestion?
+    #if targetEnvironment(macCatalyst)
+        /// The network new cameras join on the Mac: asked for once, then reused (a Mac cannot join a
+        /// camera's own Wi-Fi). Its password stays in `MultiviewNetworkStore`.
+        let cameraNetwork: CameraNetworkPairing
+    #endif
     /// Live streaming (the shared OpenCine coordinator); only the app's root model streams.
     private(set) var liveStream: LiveStreamCoordinator?
 
@@ -73,6 +81,14 @@ final class AppModel {
                 ] : [],
             store: Self.camerasStore(defaults))
         shell = ShellModel(cameras: cameras, control: control)
+        #if targetEnvironment(macCatalyst)
+            cameraNetwork = CameraNetworkPairing(
+                store: CameraNetworkStore(defaults: defaults, key: "desktop.cameraNetwork"),
+                password: { MultiviewNetworkStore.load(ssid: $0, hotspot: false)?.password },
+                savePassword: { MultiviewNetworkStore.save(ssid: $0.ssid, password: $0.password, hotspot: false) },
+                // A Mac names its Wi-Fi only through CoreWLAN (OpenCine's ComputerWiFi).
+                currentNetwork: { await ComputerWiFi.currentNetwork() })
+        #endif
         cameraPresets = CameraSettingsPresetsModel(store: CameraSettingsPresetStore(storage: defaults), shell: shell)
         // The save rules a DJI record follows: another camera's network is never saved with
         // this one, and a setup that moves the camera is remembered before it moves it.
@@ -170,8 +186,10 @@ final class AppModel {
         hotspotQuestion = nil
         question?.answer(connect)
     }
-    @ObservationIgnored let watchRelay = WatchRelay()
-    @ObservationIgnored private var watchRelayActivated = false
+    #if !targetEnvironment(macCatalyst)
+        @ObservationIgnored let watchRelay = WatchRelay()
+        @ObservationIgnored private var watchRelayActivated = false
+    #endif
     /// The camera session and link the watch last showed. Watch presses are aimed at it, never
     /// at whatever `session` holds when the press lands (STATE-01).
     @ObservationIgnored private(set) var watchTarget: ControlTarget?
@@ -714,7 +732,9 @@ final class AppModel {
     func noteLeftLive() {
         operatorSession.close()
         captureSheet = nil
-        watchRelay.retireSource()
+        #if !targetEnvironment(macCatalyst)
+            watchRelay.retireSource()
+        #endif
         watchTarget = nil
         watchCommandSource = nil
         relaySource = nil
@@ -749,71 +769,82 @@ final class AppModel {
     }
 
     func activateWatchRelay() {
-        guard !watchRelayActivated else { return }
-        watchRelayActivated = true
-        watchRelay.onToggleRecord = { [weak self] in
-            self?.watchToggleRecord()
-                ?? WatchCommandResult(
-                    accepted: false, isRecording: false, error: WatchRelayCopy.connectFirst)
-        }
-        watchRelay.onCapture = { [weak self] in
-            self?.watchCapture()
-                ?? WatchCommandResult(
-                    accepted: false, isRecording: false, error: WatchRelayCopy.connectFirst)
-        }
-        watchRelay.onAdmittedToggleRecord = { [weak self] admission in
-            self?.watchShutter(photo: false, watchAdmission: admission)
-                ?? WatchCommandResult(
-                    accepted: false, isRecording: false, error: WatchRelayCopy.connectFirst)
-        }
-        watchRelay.onAdmittedCapture = { [weak self] admission in
-            self?.watchShutter(photo: true, watchAdmission: admission)
-                ?? WatchCommandResult(
-                    accepted: false, isRecording: false, error: WatchRelayCopy.connectFirst)
-        }
-        watchRelay.onReachabilityChanged = { [weak self] in
-            guard let self else { return }
-            self.session.decoder.needsWatchPreview = self.watchRelay.hasCompanion
-            self.publishWatchState()
-        }
-        session.decoder.needsWatchPreview = watchRelay.hasCompanion
-        session.decoder.onWatchPreview = { [weak self] image, source, unmanaged in
-            guard let self else { return }
-            self.watchRelay.ingestPreview(
-                image, source: source, unmanaged: unmanaged,
-                mirrored: self.session.decoder.presentedPictureFlip ?? false,
-                flippedVertically: self.assist.flipsVertically,
-                timecode: self.liveStatus.clock,
-                isRecording: self.session.status.isRecording)
-        }
-        session.onChromePublished = { [weak self] in
-            self?.publishWatchState()
-        }
-        watchRelay.activate()
-        publishWatchState()
+        #if !targetEnvironment(macCatalyst)
+            guard !watchRelayActivated else { return }
+            watchRelayActivated = true
+            watchRelay.onToggleRecord = { [weak self] in
+                self?.watchToggleRecord()
+                    ?? WatchCommandResult(
+                        accepted: false, isRecording: false, error: WatchRelayCopy.connectFirst)
+            }
+            watchRelay.onCapture = { [weak self] in
+                self?.watchCapture()
+                    ?? WatchCommandResult(
+                        accepted: false, isRecording: false, error: WatchRelayCopy.connectFirst)
+            }
+            watchRelay.onAdmittedToggleRecord = { [weak self] admission in
+                self?.watchShutter(photo: false, watchAdmission: admission)
+                    ?? WatchCommandResult(
+                        accepted: false, isRecording: false, error: WatchRelayCopy.connectFirst)
+            }
+            watchRelay.onAdmittedCapture = { [weak self] admission in
+                self?.watchShutter(photo: true, watchAdmission: admission)
+                    ?? WatchCommandResult(
+                        accepted: false, isRecording: false, error: WatchRelayCopy.connectFirst)
+            }
+            watchRelay.onReachabilityChanged = { [weak self] in
+                guard let self else { return }
+                self.session.decoder.needsWatchPreview = self.watchRelay.hasCompanion
+                self.publishWatchState()
+            }
+            session.decoder.needsWatchPreview = watchRelay.hasCompanion
+            session.decoder.onWatchPreview = { [weak self] image, source, unmanaged in
+                guard let self else { return }
+                self.watchRelay.ingestPreview(
+                    image, source: source, unmanaged: unmanaged,
+                    mirrored: self.session.decoder.presentedPictureFlip ?? false,
+                    flippedVertically: self.assist.flipsVertically,
+                    timecode: self.liveStatus.clock,
+                    isRecording: self.session.status.isRecording)
+            }
+            session.onChromePublished = { [weak self] in
+                self?.publishWatchState()
+            }
+            watchRelay.activate()
+            publishWatchState()
+        #else
+            // No watch on a Mac. The same clean preview tap feeds this module's webcam input, and
+            // asks for decoded frames whether or not a picture is presented.
+            if let host = DesktopModuleHost.current {
+                session.decoder.needsWatchPreview = true
+                session.decoder.onWatchPreview = { image, _, _ in host.publish(image) }
+            }
+        #endif
     }
 
     func publishWatchState() {
-        let target = session.control.target
-        let commandSource = session.commandOwner.map {
-            DJICommandAdmission(owner: $0, isCurrent: { true })
-        }
-        if watchTarget != target || watchCommandSource?.source != commandSource?.source
-            || watchCommandSource?.owner !== commandSource?.owner
-        {
-            watchRelay.retireSource()
-        }
-        watchTarget = target
-        watchCommandSource = commandSource
-        watchRelay.ingestState(
-            WatchRelayState.snapshot(
-                status: session.status,
-                timecode: liveStatus.clock,
-                phase: session.phase,
-                cameraName: session.connectedCamera?.name ?? "",
-                feedLive: session.decoder.lastPresentedAt != nil,
-                power: control.snapshot?.power ?? .unknown,
-                storage: control.snapshot?.storage ?? .unknown))
+        #if !targetEnvironment(macCatalyst)
+            let target = session.control.target
+            let commandSource = session.commandOwner.map {
+                DJICommandAdmission(owner: $0, isCurrent: { true })
+            }
+            if watchTarget != target || watchCommandSource?.source != commandSource?.source
+                || watchCommandSource?.owner !== commandSource?.owner
+            {
+                watchRelay.retireSource()
+            }
+            watchTarget = target
+            watchCommandSource = commandSource
+            watchRelay.ingestState(
+                WatchRelayState.snapshot(
+                    status: session.status,
+                    timecode: liveStatus.clock,
+                    phase: session.phase,
+                    cameraName: session.connectedCamera?.name ?? "",
+                    feedLive: session.decoder.lastPresentedAt != nil,
+                    power: control.snapshot?.power ?? .unknown,
+                    storage: control.snapshot?.storage ?? .unknown))
+        #endif
     }
 
     // MARK: Remote shutter (A2-32)
@@ -1085,11 +1116,10 @@ struct LinkExperience: View {
                 pair: {
                     model.shell.beginPairing()
                     if let sighting = model.cameras.nearby.first(where: { $0.id == model.cameras.selection }) {
-                        model.cameras.connect(sighting)
+                        model.pair(sighting)
                     }
                 }),
-            pairingFlow: model.pairingWizard().flow(
-                model.cameras, onDone: { model.shell.endPairing() }, rescan: { model.session.startScan() }),
+            pairingFlow: model.pairingFlow(),
             coverPresentation: .shell
         ) { _ in
             LiveViewScreen()

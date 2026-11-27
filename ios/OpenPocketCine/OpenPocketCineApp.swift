@@ -1,6 +1,9 @@
 import MonitorUI
 import OpenCineAppKit
 import OpenCineCameraControls
+#if targetEnvironment(macCatalyst)
+    import OpenCineVirtualCamera
+#endif
 import SwiftUI
 import UIKit
 
@@ -33,6 +36,11 @@ struct OpenPocketCineApp: App {
                 // iPad ignores Info.plist `UIStatusBarHidden` after launch unless
                 // the hosting controller prefers it hidden. `~ipad` covers launch.
                 .statusBarHidden(true)
+                #if targetEnvironment(macCatalyst)
+                    .task { DesktopModuleHost.current?.start() }
+                    // In the dock: the desktop monitor, with its toolbar and keys.
+                    .monitorDesktopCommands(DesktopModuleHost.current?.monitorSink)
+                #endif
         }
     }
 
@@ -62,3 +70,14 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         monitorRotation.supportedOrientations
     }
 }
+
+#if targetEnvironment(macCatalyst)
+    extension DesktopModuleHost {
+        /// The dock module's commands as the shared live monitor's desktop sink.
+        var monitorSink: MonitorDesktopCommandSink {
+            MonitorDesktopCommandSink(
+                register: commands.register, unregister: commands.unregister,
+                applyLook: commands.applyLook)
+        }
+    }
+#endif

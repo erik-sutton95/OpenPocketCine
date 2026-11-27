@@ -159,8 +159,13 @@ extension CameraSession: DJIConnectPort {
     }
 
     static func failure(_ reason: ConnectionFailure.Reason, _ code: String, _ message: String) -> ConnectionFailure {
-        ConnectionFailure(
-            reason: reason, title: "Couldn’t connect over Camera Wi-Fi", message: message, actions: [.retry],
+        #if targetEnvironment(macCatalyst)
+            let title = "Couldn’t connect over Wi-Fi"  // The Mac's camera network, never camera Wi-Fi.
+        #else
+            let title = "Couldn’t connect over Camera Wi-Fi"
+        #endif
+        return ConnectionFailure(
+            reason: reason, title: title, message: message, actions: [.retry],
             code: "\(DJICameraSessionAdapter.integration.rawValue).\(code)")
     }
 
